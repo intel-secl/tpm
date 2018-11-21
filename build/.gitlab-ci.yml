@@ -1,0 +1,6 @@
+before_script:
+  - yum install gcc
+
+job1:
+  script:
+    - echo "Hello"
