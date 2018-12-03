@@ -85,6 +85,5 @@ cpp/*.o
 cpp/*.a
 
 main
-go-tpm
 
 .vscode

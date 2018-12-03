@@ -98,7 +98,7 @@ ENV PATH ${PATH}:/usr/local/go/bin
 
 COPY . /root/go/tpm
 WORKDIR /root/go/tpm
-RUN go build cmd/go-tpm/main.go && mv ./main /usr/local/bin/go-tpm
+RUN go build cmd/tpm/main.go && mv ./main /usr/local/bin/go-tpm
 
 COPY docker/start_tpm1.sh /usr/local/bin/start_tpm1
 COPY docker/start_tpm2.sh /usr/local/bin/start_tpm2 
