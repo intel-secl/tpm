@@ -12,9 +12,8 @@ import (
 	"unsafe"
 )
 
-// Tpm interface
+// Tpm interface defines various methods a TPM 1.2 or TPM 2.0 chip can perform
 type Tpm interface {
-	// CreateCertifiedKey creates a new binding or signing key that is certified by the AIK
 	CreateCertifiedKey(usage Usage, keyAuth []byte, aikAuth []byte) (*CertifiedKey, error)
 	Unbind(ck *CertifiedKey, keyAuth []byte, encData []byte) ([]byte, error)
 	Close()
@@ -119,12 +118,12 @@ func Open() (Tpm, error) {
 	if Config.UseSimulator {
 		switch Config.SimulatorVersion {
 		case V12:
-			var tpm C.TPM12
-			C.TpmOpen12(&tpm)
+			var tpm Tpm12
+			C.TpmOpen12((*C.TPM12)(&tpm))
 			return &tpm, nil
 		case V20:
-			var tpm C.TPM20
-			C.TpmOpen20(&tpm, C.TCTI(Socket))
+			var tpm Tpm20
+			C.TpmOpen20((*C.TPM20)(&tpm), C.TCTI(Socket))
 			return &tpm, nil
 		default:
 			return nil, errors.New("Config.SimulatorVersion is not set to a valid verison value")
@@ -132,19 +131,29 @@ func Open() (Tpm, error) {
 	}
 	switch v := DetectVersion(); v {
 	case V12:
-		var tpm C.TPM12
-		C.TpmOpen12(&tpm)
+		var tpm Tpm12
+		C.TpmOpen12((*C.TPM12)(&tpm))
 		return &tpm, nil
 	case V20:
-		var tpm C.TPM20
-		C.TpmOpen20(&tpm, C.TCTI(Config.Tcti))
+		var tpm Tpm20
+		C.TpmOpen20((*C.TPM20)(&tpm), C.TCTI(Config.Tcti))
 		return &tpm, nil
 	default:
 		return nil, errors.New("could not find TPM on the system")
 	}
 }
 
-func (t *C.TPM12) CreateCertifiedKey(usage Usage, keyAuth []byte, aikAuth []byte) (*CertifiedKey, error) {
+// Tpm12 is a type alias for a Native C.TPM12 structure
+type Tpm12 C.TPM12
+
+// Tpm20 is a type alias for a Native C.TPM20 structure
+type Tpm20 C.TPM20
+
+// CreateCertifiedKey creates a new signing or binding key with the specified password.
+// The newly created key is then signed using the AIK which must be present on the TPM already before calling this function.
+// The AIK is loaded using the provided aikAuth byte array
+// A pointer to a CertifiedKey structure, which contains opaque byte blobs that represent TPM specific structures.
+func (t *Tpm12) CreateCertifiedKey(usage Usage, keyAuth []byte, aikAuth []byte) (*CertifiedKey, error) {
 	if t == nil {
 		return nil, errors.New("invoked Tpm.CreateCertifiedKey on nil receiver")
 	}
@@ -154,7 +163,7 @@ func (t *C.TPM12) CreateCertifiedKey(usage Usage, keyAuth []byte, aikAuth []byte
 	defer C.free(unsafe.Pointer(key.keySignature.buffer))
 	defer C.free(unsafe.Pointer(key.keyAttestation.buffer))
 
-	rc := C.TpmCreateCertifiedKey12(t, &key, C.Usage(usage), C.uint(len(keyAuth)), (*C.uchar)(unsafe.Pointer(&keyAuth[0])), C.uint(len(aikAuth)), (*C.uchar)(unsafe.Pointer(&aikAuth[0])))
+	rc := C.TpmCreateCertifiedKey12((*C.TPM12)(t), &key, C.Usage(usage), C.uint(len(keyAuth)), (*C.uchar)(unsafe.Pointer(&keyAuth[0])), C.uint(len(aikAuth)), (*C.uchar)(unsafe.Pointer(&aikAuth[0])))
 	if rc == 0 {
 		return &CertifiedKey{
 			Version:        V12,
@@ -169,7 +178,11 @@ func (t *C.TPM12) CreateCertifiedKey(usage Usage, keyAuth []byte, aikAuth []byte
 	return nil, fmt.Errorf("failed to create tpm 1.2 key: %d", int(rc))
 }
 
-func (t *C.TPM20) CreateCertifiedKey(usage Usage, keyAuth []byte, aikAuth []byte) (*CertifiedKey, error) {
+// CreateCertifiedKey creates a new signing or binding key with the specified password.
+// The newly created key is then signed using the AIK which must be present on the TPM already before calling this function.
+// The AIK is loaded using the provided aikAuth byte array
+// A pointer to a CertifiedKey structure, which contains opaque byte blobs that represent TPM specific structures.
+func (t *Tpm20) CreateCertifiedKey(usage Usage, keyAuth []byte, aikAuth []byte) (*CertifiedKey, error) {
 	if t == nil {
 		return nil, errors.New("invoked Tpm.CreateCertifiedKey on nil receiver")
 	}
@@ -180,7 +193,7 @@ func (t *C.TPM20) CreateCertifiedKey(usage Usage, keyAuth []byte, aikAuth []byte
 	defer C.free(unsafe.Pointer(key.keyAttestation.buffer))
 	defer C.free(unsafe.Pointer(key.keyName.buffer))
 
-	rc := C.TpmCreateCertifiedKey20(t, &key, C.Usage(usage), C.uint(len(keyAuth)), (*C.uchar)(unsafe.Pointer(&keyAuth[0])), C.uint(len(aikAuth)), (*C.uchar)(unsafe.Pointer(&aikAuth[0])))
+	rc := C.TpmCreateCertifiedKey20((*C.TPM20)(t), &key, C.Usage(usage), C.uint(len(keyAuth)), (*C.uchar)(unsafe.Pointer(&keyAuth[0])), C.uint(len(aikAuth)), (*C.uchar)(unsafe.Pointer(&aikAuth[0])))
 	if rc == 0 {
 		return &CertifiedKey{
 			Version:        V20,
@@ -195,7 +208,12 @@ func (t *C.TPM20) CreateCertifiedKey(usage Usage, keyAuth []byte, aikAuth []byte
 	return nil, fmt.Errorf("failed to create 2.0 key: %d", rc)
 }
 
-func (t *C.TPM12) Unbind(ck *CertifiedKey, keyAuth []byte, encData []byte) ([]byte, error) {
+// Unbind decrypts data that was bound with a Binding Key created by a TPM.
+// This function will load in the private key blob (which is protected and only loadable by the original TPM by its SRK)
+// and then decrypt the bound data using the private key
+// The CertifiedKey struct must be passed in so the Tpm can load the private blob. The binding key password must also be provided.
+// Upon successful loading of the private blob, the tpm will decrypt encData, and return the plaintext
+func (t *Tpm12) Unbind(ck *CertifiedKey, keyAuth []byte, encData []byte) ([]byte, error) {
 	// int TpmUnbind12(TPM12* tpm, unsigned int* unboundLenOut, unsigned char** unboundDataOut,
 	// 					unsigned int privateKeyLen , const unsigned char* inKey,
 	//					unsigned int keyAuthLen, const unsigned char* keyAuth,
@@ -206,7 +224,7 @@ func (t *C.TPM12) Unbind(ck *CertifiedKey, keyAuth []byte, encData []byte) ([]by
 	var unboundLen C.uint
 	var unboundData *C.uchar
 	defer C.free(unsafe.Pointer(unboundData))
-	rc := C.TpmUnbind12(t, &unboundLen, &unboundData,
+	rc := C.TpmUnbind12((*C.TPM12)(t), &unboundLen, &unboundData,
 		C.uint(len(ck.PrivateKey)), (*C.uchar)(unsafe.Pointer(&ck.PrivateKey[0])),
 		C.uint(len(keyAuth)), (*C.uchar)(unsafe.Pointer(&keyAuth[0])),
 		C.uint(len(encData)), (*C.uchar)(unsafe.Pointer(&encData[0])))
@@ -216,7 +234,12 @@ func (t *C.TPM12) Unbind(ck *CertifiedKey, keyAuth []byte, encData []byte) ([]by
 	return nil, fmt.Errorf("failed to unbind 1.2 data: %d", rc)
 }
 
-func (t *C.TPM20) Unbind(ck *CertifiedKey, keyAuth []byte, encData []byte) ([]byte, error) {
+// Unbind decrypts data that was bound with a Binding Key created by a TPM.
+// This function will load in the private key blob (which is protected and only loadable by the original TPM by its SRK)
+// and then decrypt the bound data using the private key
+// The CertifiedKey struct must be passed in so the Tpm can load the private blob. The binding key password must also be provided.
+// Upon successful loading of the private blob, the tpm will decrypt encData, and return the plaintext
+func (t *Tpm20) Unbind(ck *CertifiedKey, keyAuth []byte, encData []byte) ([]byte, error) {
 	//int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unboundDataOut,
 	//					unsigned int privateKeyLen , const unsigned char* inPrivateKey,
 	//					unsigned int publicKeyLen, const unsigned char* inPublicKey,
@@ -228,7 +251,7 @@ func (t *C.TPM20) Unbind(ck *CertifiedKey, keyAuth []byte, encData []byte) ([]by
 	var unboundLen C.uint
 	var unboundData *C.uchar
 	defer C.free(unsafe.Pointer(unboundData))
-	rc := C.TpmUnbind20(t, &unboundLen, &unboundData,
+	rc := C.TpmUnbind20((*C.TPM20)(t), &unboundLen, &unboundData,
 		C.uint(len(ck.PrivateKey)), (*C.uchar)(unsafe.Pointer(&ck.PrivateKey[0])),
 		C.uint(len(ck.PublicKey)), (*C.uchar)(unsafe.Pointer(&ck.PublicKey[0])),
 		C.uint(len(keyAuth)), (*C.uchar)(unsafe.Pointer(&keyAuth[0])),
@@ -239,10 +262,12 @@ func (t *C.TPM20) Unbind(ck *CertifiedKey, keyAuth []byte, encData []byte) ([]by
 	return nil, fmt.Errorf("failed to unbind 2.0 data: %d", rc)
 }
 
-func (t *C.TPM12) Close() {
-	C.TpmClose12(t)
+// Close finalizes a tpm object
+func (t *Tpm12) Close() {
+	C.TpmClose12((*C.TPM12)(t))
 }
 
-func (t *C.TPM20) Close() {
-	C.TpmClose20(t)
+// Close finalizes a tpm object
+func (t *Tpm20) Close() {
+	C.TpmClose20((*C.TPM20)(t))
 }
