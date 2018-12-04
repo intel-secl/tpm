@@ -18,7 +18,7 @@ test:
     - sleep 3
     - provision12 1234 1234
     - provision20 1234 1234
-    - go test 
+    - go test -cover
   
 compile:
   stage: build
