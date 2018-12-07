@@ -7,6 +7,8 @@
 
 typedef struct TPM20 {
     void* libTcti;
+    void* libTss2;
+    int legacy;
     TSS2_TCTI_CONTEXT* tcti;
     TSS2_SYS_CONTEXT* context;
 } TPM20;

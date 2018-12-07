@@ -53,6 +53,9 @@ func createCertifiedKey() {
 	fmt.Println("Public Key:", hex.EncodeToString(ck.PublicKey))
 	fmt.Println("KeySignature:", hex.EncodeToString(ck.KeySignature))
 	fmt.Println("KeyAttestation:", hex.EncodeToString(ck.KeyAttestation))
+	if len(ck.KeyAttestation) > 0 {
+		fmt.Println("KeyName:", hex.EncodeToString(ck.KeyName))
+	}
 }
 
 func unbind() {
@@ -62,7 +65,7 @@ func unbind() {
 func printUsage() {
 	fmt.Println(os.Args[0], "[options]")
 	fmt.Println("CreateCertifiedKey <usage := bind|sign> <keyAuth := hexstring> <aikAuth := hexstring>")
-	fmt.Println("\tOutput: <publicKey, privateKey, keySignature, keyAttestation>")
+	fmt.Println("\tOutput: <publicKey, privateKey, keySignature, keyAttestation, keyName:optional>")
 	fmt.Println("Unbind <privateKey> <encrypteddata>")
 	fmt.Println("\tOutput: <decrypteddata>")
 }

@@ -1,6 +1,6 @@
 package tpm
 
-// #cgo CFLAGS: -I${SRCDIR}/include/tss2/include -I${SRCDIR}/include/tspi/include
+// #cgo CFLAGS: -I${SRCDIR}/include/tss2/include -I${SRCDIR}/include/tspi/include -DMAXLOGLEVEL=LOGL_NONE
 // #cgo LDFLAGS: -ldl
 // #include "tpm.h"
 import "C"
@@ -57,6 +57,9 @@ func checkSysClassTpm12() bool {
 	if _, err := os.Stat("/sys/class/tpm/tpm0/device/caps"); !os.IsNotExist(err) {
 		return true
 	}
+	if _, err := os.Stat("/sys/class/misc/tpm0/device/caps"); !os.IsNotExist(err) {
+		return true
+	}
 	return false
 }
 
@@ -64,15 +67,19 @@ func checkSysClassTpm20() bool {
 	if _, err := os.Stat("/sys/class/tpm/tpm0/device/description"); !os.IsNotExist(err) {
 		return true
 	}
+	tpm12Detected := checkSysClassTpm12()
+	if _, err := os.Stat("/sys/class/tpm/tpm0/device"); !os.IsNotExist(err) && !tpm12Detected {
+		return true
+	}
 	return false
 }
 
 // DetectVersion attempts to detect the installed TPM Version
 func DetectVersion() Version {
-	if checkSysClassTpm20() {
-		return V20
-	} else if checkSysClassTpm12() {
+	if checkSysClassTpm12() {
 		return V12
+	} else if checkSysClassTpm20() {
+		return V20
 	}
 	return None
 }
@@ -94,7 +101,12 @@ var Config struct {
 	// Defaults to LEGACY (zero value)
 	UseSimulator     bool
 	SimulatorVersion Version
-	Tcti             Tcti
+
+	V12 struct {
+	}
+	V20 struct {
+		Tcti Tcti
+	}
 }
 
 // impolicitly alled on package initialization
@@ -110,6 +122,15 @@ func init() {
 		case "2.0":
 			Config.SimulatorVersion = V20
 		}
+
+		switch tcti := os.Getenv("TPM_SIM_TCTI"); tcti {
+		case "legacy":
+			Config.V20.Tcti = Legacy
+		case "socket":
+			Config.V20.Tcti = Socket
+		case "abrmd":
+			Config.V20.Tcti = Abrmd
+		}
 	}
 }
 
@@ -119,24 +140,36 @@ func Open() (Tpm, error) {
 		switch Config.SimulatorVersion {
 		case V12:
 			var tpm Tpm12
-			C.TpmOpen12((*C.TPM12)(&tpm))
+			rc := C.TpmOpen12((*C.TPM12)(&tpm))
+			if rc != 0 {
+				return nil, errors.New(fmt.Sprintf("could not open TPM 1.2 sim: %d", rc))
+			}
 			return &tpm, nil
 		case V20:
 			var tpm Tpm20
-			C.TpmOpen20((*C.TPM20)(&tpm), C.TCTI(Socket))
+			rc := C.TpmOpen20((*C.TPM20)(&tpm), C.TCTI(Config.V20.Tcti))
+			if rc != 0 {
+				return nil, errors.New(fmt.Sprintf("could not open TPM 2.0 sim: %d", rc))
+			}
 			return &tpm, nil
 		default:
-			return nil, errors.New("Config.SimulatorVersion is not set to a valid verison value")
+			return nil, errors.New("Config.SimulatorVersion is not set to a valid version value")
 		}
 	}
 	switch v := DetectVersion(); v {
 	case V12:
 		var tpm Tpm12
-		C.TpmOpen12((*C.TPM12)(&tpm))
+		rc := C.TpmOpen12((*C.TPM12)(&tpm))
+		if rc != 0 {
+			return nil, errors.New(fmt.Sprintf("could not open TPM 1.2 device: %d", rc))
+		}
 		return &tpm, nil
 	case V20:
 		var tpm Tpm20
-		C.TpmOpen20((*C.TPM20)(&tpm), C.TCTI(Config.Tcti))
+		rc := C.TpmOpen20((*C.TPM20)(&tpm), C.TCTI(Config.V20.Tcti))
+		if rc != 0 {
+			return nil, errors.New(fmt.Sprintf("could not open TPM 2.0 device: %d", rc))
+		}
 		return &tpm, nil
 	default:
 		return nil, errors.New("could not find TPM on the system")

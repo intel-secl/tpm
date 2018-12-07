@@ -15,9 +15,11 @@ test:
   script:
     - start12 > /dev/null &
     - start20 > /dev/null &
+    - start20_legacy > /dev/null &
     - sleep 3
-    - provision12 1234 1234
-    - provision20 1234 1234
+    - provision12 1234 5678
+    - provision20 1234 5678
+    - provision20_legacy 1234 5678
     - go test -cover
   
 compile:

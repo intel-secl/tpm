@@ -1,9 +1,36 @@
-#include "tpm20.h"
+#include "tpm.h"
+#include "tss2.h"
 #include <dlfcn.h>
 #include <stdio.h>
 #include <string.h>
 
 #define CHECK(rc) if ((rc) != TPM2_RC_SUCCESS) { fprintf(stderr, "Failure at: %s:%d\n", __FILE__, __LINE__); goto out; }
+
+
+// TSS2 changed several structure definitions, so to support the ancient version TrustAgent has, we need to create some old instances of structs
+typedef struct {
+    uint8_t cmdAuthsCount;
+    TPMS_AUTH_COMMAND **cmdAuths;
+} TSS2_SYS_CMD_AUTHS;
+
+typedef struct {
+    uint8_t rspAuthsCount;
+    TPMS_AUTH_RESPONSE **rspAuths;
+} TSS2_SYS_RSP_AUTHS;
+
+typedef struct {
+    TPMI_SH_AUTH_SESSION	sessionHandle;	 /* the session handle  */
+	TPM2B_NONCE	nonce;	 /* the session nonce may be the Empty Buffer  */
+	//TPMA_SESSION	sessionAttributes;	 /* the session attributes  */
+    UINT32 sessionsAttributes;
+	TPM2B_AUTH	hmac;	 /* either an HMAC a password or an EmptyAuth  */
+} TPMS_AUTH_COMMAND_LEGACY;
+
+typedef	struct {
+	TPM2B_NONCE	nonce;	 /* the session nonce may be the Empty Buffer  */
+	TPMA_SESSION	sessionAttributes;	 /* the session attributes  */
+	TPM2B_AUTH	hmac;	 /* either an HMAC or an EmptyAuth  */
+} TPMS_AUTH_RESPONSE_LEGACY;
 
 typedef enum { NO_PREFIX = 0, RM_PREFIX = 1 } printf_type;
 typedef int (*TCTI_LOG_CALLBACK)( void *data, printf_type type, const char *format, ...);
@@ -26,7 +53,7 @@ void TpmClose20(TPM20* tpm) {
             free(tpm->tcti);
         }
         if (tpm->context) {
-            Tss2_Sys_Finalize(tpm->context);
+            _Tss2_Sys_Finalize(tpm);
             free(tpm->context);
         }
         if (tpm->libTcti) {
@@ -35,8 +62,10 @@ void TpmClose20(TPM20* tpm) {
     }
 }
 
-extern int TSS2_LEGACY;
 int TpmOpen20(TPM20* tpm, TCTI tctiType) {
+    TSS2_ABI_VERSION *abiv;
+    TSS2_ABI_VERSION abiLegacy = {1,1,1,1};
+    TSS2_ABI_VERSION abiModern = TSS2_ABI_VERSION_CURRENT;
     if (tpm == NULL) {
         return -1;
     }
@@ -45,69 +74,79 @@ int TpmOpen20(TPM20* tpm, TCTI tctiType) {
     tpm->context = NULL;
 
     if (tctiType == LEGACY) {
-        TSS2_LEGACY = 1;
-        tpm->libTcti = dlopen("libtcti-socket.so", RTLD_LAZY);
-        if (tpm->libTcti == NULL) {
+        //TSS2_LEGACY = 1;
+        tpm->legacy = 1;
+        tpm->libTss2 = dlopen(LIB_SAPI, RTLD_LAZY);
+        if (tpm->libTss2 == NULL) {
             return -2;
         }
+        abiv = &abiLegacy;
+        tpm->libTcti = dlopen(LIB_TCTI_SOCKET_LEGACY, RTLD_LAZY);
+        if (tpm->libTcti == NULL) {
+            return -3;
+        }
         TCTI_SOCKET_CONF conf = {
-            .hostname = "localhost",
-            .port = 2321
+            .hostname = "127.0.0.1",
+            .port = 2323
         };
         LEGACY_INIT_FN fn = (LEGACY_INIT_FN)dlsym(tpm->libTcti, "InitSocketTcti");
         if (fn == NULL) {
-            return -3;
+            return -4;
         }
         size_t size;
         TPM2_RC rc = fn(NULL, &size, &conf, 0);
         tpm->tcti = (TSS2_TCTI_CONTEXT*)calloc(size, 1);
         if (tpm->tcti == NULL) {
-            return -4;
+            return -5;
         }
         // call init again
         rc = fn(tpm->tcti, &size, &conf, 0);
         if (rc != TPM2_RC_SUCCESS) {
-            return -5;
+            return -6;
         }
     } else if(tctiType == ABRMD || tctiType == SOCKET) {
-        TSS2_LEGACY = 0;
-        const char* tctiName = tctiType == ABRMD ? "libtss2-tcti-tabrmd.so" : "libtss2-tcti-mssim.so";
+        tpm->legacy = 0;
+        abiv = &abiModern;
+        tpm->libTss2 = dlopen(LIB_TSS2_SYS, RTLD_LAZY);
+        if (tpm->libTss2 == NULL) {
+            return -7;
+        }
+        const char* tctiName = tctiType == ABRMD ? LIB_TCTI_TABRMD : LIB_TCTI_MSSIM;
         tpm->libTcti = dlopen(tctiName, RTLD_LAZY);
         if (tpm->libTcti == NULL) {
-            return -6;
+            return -8;
         }
         TSS2_TCTI_INFO_FUNC infoFn = (TSS2_TCTI_INFO_FUNC)dlsym(tpm->libTcti, TSS2_TCTI_INFO_SYMBOL);
         if (infoFn == NULL) {
-            return -7;
+            return -9;
         }
         const TSS2_TCTI_INFO* info = infoFn();
         size_t size;
         TPM2_RC rc = info->init(NULL, &size, NULL); 
         if (rc != TPM2_RC_SUCCESS) {
-            return -8;
+            return -10;
         }
         tpm->tcti = (TSS2_TCTI_CONTEXT*)calloc(size, 1);
         if (tpm->tcti == NULL) {
-            return -9;
+            return -11;
         }
         rc = info->init(tpm->tcti, &size, NULL);
         if (rc != TPM2_RC_SUCCESS) {
-            return -10;
+            return -12;
         }
     } else {
         // Unknown TCTI type
-        return -11;
+        return -13;
     }
     // setup TSS2 SYS CONTEXT
-    size_t size = Tss2_Sys_GetContextSize(0);
+    size_t size = _Tss2_Sys_GetContextSize(tpm, 0);
     tpm->context = (TSS2_SYS_CONTEXT*)calloc(size, 1);
     if (tpm->context == NULL) {
-        return -12;
+        return -14;
     }
-    TSS2_ABI_VERSION abiv = TSS2_ABI_VERSION_CURRENT;
-    TSS2_RC rc = Tss2_Sys_Initialize(tpm->context, size, tpm->tcti, &abiv);
+    TSS2_RC rc = _Tss2_Sys_Initialize(tpm, size, tpm->tcti, abiv);
     if (rc != TPM2_RC_SUCCESS) {
-        return -13;
+        return -15;
     }
     return rc;
 }
@@ -138,17 +177,38 @@ int TpmCreateCertifiedKey20(TPM20* tpm, CertifiedKey20* keyOut, Usage usage, uns
 
     const TPMI_DH_OBJECT srkHandle = 0x81000000;
     const TPMI_DH_OBJECT aikHandle = 0x81018000;
-    TSS2L_SYS_AUTH_COMMAND authSession = {
+    TSS2L_SYS_AUTH_COMMAND nullSession = {
         .count = 1, .auths = {{
             .sessionHandle = TPM2_RS_PW,
+            .hmac = {
+                .size = 0
+            },
+            .nonce = {
+                .size = 0
+            }
         }}
     };
+
+    TPMS_AUTH_COMMAND_LEGACY nullAuthCommandLegacy = {
+        .sessionHandle = TPM2_RS_PW,
+        .hmac = {
+            .size = 0
+        },
+        .nonce = {
+            .size = 0
+        }
+    };
+    TPMS_AUTH_COMMAND_LEGACY *legacyTpmsAuth[1] = {&nullAuthCommandLegacy};
+    TSS2_SYS_CMD_AUTHS nullSessionLegacy = {
+        .cmdAuthsCount = 1,
+        .cmdAuths = (void*)&legacyTpmsAuth[0]
+    };
     TPM2B_SENSITIVE_CREATE inSensitive = {};
-    TPM2B_AUTH keyAuthCmd = {
+    TPM2B_AUTH keyAuth2B = {
         .size = keyAuthLen
     };
-    memcpy(keyAuthCmd.buffer, keyAuth, keyAuthLen);
-    inSensitive.sensitive.userAuth = keyAuthCmd;
+    memcpy(keyAuth2B.buffer, keyAuth, keyAuthLen);
+    inSensitive.sensitive.userAuth = keyAuth2B;
     uint32_t typeFlag = usage == BINDING ? TPMA_OBJECT_DECRYPT : TPMA_OBJECT_SIGN_ENCRYPT;
     TPM2B_PUBLIC inPublic = {
         .publicArea = {
@@ -187,43 +247,87 @@ int TpmCreateCertifiedKey20(TPM20* tpm, CertifiedKey20* keyOut, Usage usage, uns
         .size = sizeof(((TPM2B_DIGEST*)0)->buffer)
     };
     TPMT_TK_CREATION creationTicket = {};
-    TSS2L_SYS_AUTH_RESPONSE sessionsDataOut;
+    TSS2L_SYS_AUTH_RESPONSE sessionsDataOut = {
+        .count = 1,
+        .auths = {{}}
+    };
+    TPMS_AUTH_RESPONSE_LEGACY authResponse = {0};
+    TPMS_AUTH_RESPONSE_LEGACY *legacyRspAuths[1] = {&authResponse};
+    TSS2_SYS_RSP_AUTHS sessionsOutLegacy = {
+        .rspAuthsCount = 1,
+        .rspAuths = (void*)&legacyRspAuths[0]
+    };
     TPM2_RC rc;
-
     do {
-        rc = Tss2_Sys_Create(tpm->context, srkHandle, &authSession,
+        rc = _Tss2_Sys_Create(tpm, srkHandle, tpm->legacy ? (const void*)&nullSessionLegacy : &nullSession,
                          &inSensitive, &inPublic, &outsideInfo, 
                          &creationPCR, &outPrivate, &outPublic, 
                          &creationData, &creationHash, &creationTicket,
-                         &sessionsDataOut);
+                         tpm->legacy ? (TSS2L_SYS_AUTH_RESPONSE*)&sessionsOutLegacy : &sessionsDataOut);
     } while (rc == TPM2_RC_RETRY);
-    
-    if (rc != TPM2_RC_SUCCESS) {
-        return rc;
-    }
-    
+    CHECK(rc);
     TPM2_HANDLE loadedHandle = 0;
-    TPM2B_NAME name;
-    CHECK(rc = Tss2_Sys_Load(tpm->context, srkHandle, &authSession, &outPrivate, &outPublic, &loadedHandle, &name, &sessionsDataOut));
+    TPM2B_NAME name = { 
+        .size = sizeof(TPM2B_NAME)-2, 
+    };
+
+    TSS2L_SYS_AUTH_RESPONSE sessionsDataOut2 = {
+        .count = 1,
+        .auths = {{}}
+    };
+    TPMS_AUTH_RESPONSE_LEGACY authResponse2;
+    TPMS_AUTH_RESPONSE_LEGACY *legacyRspAuths2[3] = {&authResponse2};
+    TSS2_SYS_RSP_AUTHS sessionsOutLegacy2 = {
+        .rspAuthsCount = 1,
+        .rspAuths = (void*)&legacyRspAuths2[0]
+    };
+
+    CHECK(rc = _Tss2_Sys_Load(tpm, srkHandle, tpm->legacy ? (const TSS2L_SYS_AUTH_COMMAND*)&nullSessionLegacy : &nullSession,
+         &outPrivate, &outPublic, &loadedHandle, &name, tpm->legacy ? (TSS2L_SYS_AUTH_RESPONSE*)&sessionsOutLegacy2 : &sessionsDataOut));
+    TPMS_AUTH_COMMAND_LEGACY parentAuthCmdLegacy = {
+        .sessionHandle = TPM2_RS_PW,
+        .hmac = {
+            .size = parentAuthLen
+        },
+        .nonce = {
+            .size = 0
+        }
+    };
+    TPMS_AUTH_COMMAND_LEGACY keyAuthCmdLegacy = {
+        .sessionHandle = TPM2_RS_PW,
+        .hmac = {
+            .size = keyAuthLen
+        },
+        .nonce = {
+            .size = 0
+        }
+    };
+    memcpy(parentAuthCmdLegacy.hmac.buffer, parentAuth, parentAuthLen);
+    memcpy(keyAuthCmdLegacy.hmac.buffer, keyAuth, keyAuthLen);
+    TPMS_AUTH_COMMAND_LEGACY *legacyAuthCmd[2] = {&keyAuthCmdLegacy, &parentAuthCmdLegacy};
+    TSS2_SYS_CMD_AUTHS authSession2Legacy = {
+        .cmdAuthsCount = 2,
+        .cmdAuths = (void*)&legacyAuthCmd[0]
+    };
     TSS2L_SYS_AUTH_COMMAND authSession2 = {
         .count = 2,
         .auths = {
             {
                 .sessionHandle = TPM2_RS_PW,
                 .hmac = {
-                    .size = parentAuthLen
+                    .size = keyAuthLen
                 }
             },
             {
                 .sessionHandle = TPM2_RS_PW,
                 .hmac = {
-                    .size = keyAuthLen
+                    .size = parentAuthLen
                 }
             }
         }
     };
-    memcpy(authSession2.auths[0].hmac.buffer, parentAuth, parentAuthLen);
-    memcpy(authSession2.auths[1].hmac.buffer, keyAuth, keyAuthLen);
+    memcpy(authSession2.auths[0].hmac.buffer, keyAuth, keyAuthLen);
+    memcpy(authSession2.auths[1].hmac.buffer, parentAuth, parentAuthLen);
     TPM2B_DATA qualifyingData = {
         .size = 4,
         .buffer = { 0x00, 0xff, 0x55,0xaa }
@@ -236,9 +340,22 @@ int TpmCreateCertifiedKey20(TPM20* tpm, CertifiedKey20* keyOut, Usage usage, uns
             }
         }
     };
-    TPM2B_ATTEST certifyInfo = {};
+    TPM2B_ATTEST certifyInfo = {
+        .size = sizeof(TPM2B_ATTEST) - 2
+    };
     TPMT_SIGNATURE signature = {};
-    CHECK(rc = Tss2_Sys_Certify(tpm->context, loadedHandle, aikHandle, &authSession2, &qualifyingData, &inScheme, &certifyInfo, &signature, &sessionsDataOut));
+    TSS2L_SYS_AUTH_RESPONSE sessionsDataOut3= {
+        .count = 2,
+        .auths = {{}, {}}
+    };
+    TPMS_AUTH_RESPONSE *legacyRspAuths3[3] = {&sessionsDataOut3.auths[0], &sessionsDataOut3.auths[1]};
+    TSS2_SYS_RSP_AUTHS sessionsOutLegacy3 = {
+        .rspAuthsCount = 2,
+        .rspAuths = (void*)&legacyRspAuths3[0]
+    };
+
+    CHECK(rc = _Tss2_Sys_Certify(tpm, loadedHandle, aikHandle, tpm->legacy ? (void*)&authSession2Legacy : &authSession2, 
+        &qualifyingData, &inScheme, &certifyInfo, &signature, tpm->legacy ? (void*)&sessionsOutLegacy3 : &sessionsDataOut));
     
     // allocate buffers
     keyOut->publicKey.buffer = (unsigned char*)calloc(sizeof(TPM2B_PUBLIC), 1);
@@ -271,7 +388,6 @@ int TpmCreateCertifiedKey20(TPM20* tpm, CertifiedKey20* keyOut, Usage usage, uns
         free(keyOut->keyAttestation.buffer);
         return -13;
     }
-
     size_t written = 0;
     Tss2_MU_TPM2B_PUBLIC_Marshal(&outPublic, keyOut->publicKey.buffer, sizeof(TPM2B_PUBLIC), &written);
     keyOut->publicKey.size = written;
@@ -292,7 +408,7 @@ int TpmCreateCertifiedKey20(TPM20* tpm, CertifiedKey20* keyOut, Usage usage, uns
     Tss2_MU_TPM2B_NAME_Marshal(&name, keyOut->keyName.buffer, sizeof(TPM2B_NAME), &written);
     keyOut->keyName.size = written;
 out:
-    Tss2_Sys_FlushContext(tpm->context, loadedHandle);
+    _Tss2_Sys_FlushContext(tpm, loadedHandle);
     return rc;
 }
 
@@ -324,6 +440,9 @@ int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unbound
     TSS2L_SYS_AUTH_COMMAND authSession = {
         .count = 1, .auths = {{
             .sessionHandle = TPM2_RS_PW,
+                .hmac = {
+                    .size = keyAuthLen
+                },
         }}
     };
     memcpy(authSession.auths[0].hmac.buffer, keyAuth, keyAuthLen);
@@ -340,7 +459,7 @@ int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unbound
     Tss2_MU_TPM2B_PRIVATE_Unmarshal(inPrivateKey, privateKeyLen, &offset, &inPrivate);
     offset = 0;
     Tss2_MU_TPM2B_PUBLIC_Unmarshal(inPublicKey, publicKeyLen, &offset, &inPublic);
-    CHECK(rc = Tss2_Sys_Load(tpm->context, srkHandle, &authSession, &inPrivate, &inPublic, &bindingKeyHandle, &name, &sessionsDataOut));
+    CHECK(rc = _Tss2_Sys_Load(tpm, srkHandle, &authSession, &inPrivate, &inPublic, &bindingKeyHandle, &name, &sessionsDataOut));
     TPM2B_PUBLIC_KEY_RSA cipherText = {
         .size = dataLen
     };
@@ -356,7 +475,7 @@ int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unbound
     TPM2B_DATA label = {
         .size = 0
     };
-    CHECK(rc = Tss2_Sys_RSA_Decrypt(tpm->context, bindingKeyHandle, &authSession, &cipherText, &scheme, &label, &message, &sessionsDataOut));
+    CHECK(rc = _Tss2_Sys_RSA_Decrypt(tpm, bindingKeyHandle, &authSession, &cipherText, &scheme, &label, &message, &sessionsDataOut));
     *unboundLenOut = message.size;
     *unboundDataOut = (unsigned char*)calloc(message.size, 1);
     if (*unboundDataOut == NULL) {
@@ -365,6 +484,6 @@ int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unbound
     }
     memcpy(*unboundDataOut, message.buffer, message.size);
 out:
-    Tss2_Sys_FlushContext(tpm->context, bindingKeyHandle);
+    _Tss2_Sys_FlushContext(tpm, bindingKeyHandle);
     return rc;
 }
