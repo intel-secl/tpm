@@ -49,12 +49,12 @@ func createCertifiedKey() {
 		return
 	}
 	fmt.Println("Key TPM Version:", ck.Version)
-	fmt.Println("Private Key:", hex.EncodeToString(ck.PrivateKey))
-	fmt.Println("Public Key:", hex.EncodeToString(ck.PublicKey))
-	fmt.Println("KeySignature:", hex.EncodeToString(ck.KeySignature))
-	fmt.Println("KeyAttestation:", hex.EncodeToString(ck.KeyAttestation))
+	fmt.Println("Private Key:\n", hex.EncodeToString(ck.PrivateKey))
+	fmt.Println("Public Key:\n", hex.EncodeToString(ck.PublicKey))
+	fmt.Println("KeySignature:\n", hex.EncodeToString(ck.KeySignature))
+	fmt.Println("KeyAttestation:\n", hex.EncodeToString(ck.KeyAttestation))
 	if len(ck.KeyAttestation) > 0 {
-		fmt.Println("KeyName:", hex.EncodeToString(ck.KeyName))
+		fmt.Println("KeyName:\n", hex.EncodeToString(ck.KeyName))
 	}
 }
 
