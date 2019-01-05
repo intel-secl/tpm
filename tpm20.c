@@ -107,12 +107,15 @@ int TpmOpen20(TPM20* tpm, TCTI tctiType) {
     } else if(tctiType == ABRMD || tctiType == SOCKET) {
         tpm->legacy = 0;
         abiv = &abiModern;
-        tpm->libTss2 = dlopen(LIB_TSS2_SYS, RTLD_LAZY);
+        tpm->libTss2 = dlopen(LIB_TSS2_SYS, RTLD_LAZY) ?: dlopen(LIB_SAPI, RTLD_LAZY);
         if (tpm->libTss2 == NULL) {
             return -7;
         }
         const char* tctiName = tctiType == ABRMD ? LIB_TCTI_TABRMD : LIB_TCTI_MSSIM;
-        tpm->libTcti = dlopen(tctiName, RTLD_LAZY);
+        if (tctiType == ABRMD)
+            tpm->libTcti = dlopen(LIB_TCTI_TABRMD, RTLD_LAZY) ?: dlopen(LIB_TCTI_TABRMD_LEGACY, RTLD_LAZY);
+        else 
+            tpm->libTcti = dlopen(LIB_TCTI_MSSIM, RTLD_LAZY) ?: dlopen(LIB_TCTI_SOCKET_LEGACY, RTLD_LAZY);
         if (tpm->libTcti == NULL) {
             return -8;
         }
