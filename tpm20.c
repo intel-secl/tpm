@@ -44,7 +44,14 @@ typedef struct {
     void *logData;
 } TCTI_SOCKET_CONF;
 
-typedef TSS2_RC (*LEGACY_INIT_FN)(TSS2_TCTI_CONTEXT*, size_t*, const TCTI_SOCKET_CONF*, const uint8_t);
+typedef struct {
+    const char *device_path;
+    TCTI_LOG_CALLBACK logCallback;
+    void *logData;
+} TCTI_DEVICE_CONF;
+
+typedef TSS2_RC (*SOCKET_LEGACY_INIT_FN)(TSS2_TCTI_CONTEXT*, size_t*, const TCTI_SOCKET_CONF*, const uint8_t);
+typedef TSS2_RC (*TABRMD_LEGACY_INIT_FN)(TSS2_TCTI_CONTEXT*, size_t*);
 
 void TpmClose20(TPM20* tpm) {
     if (tpm != NULL) {
@@ -73,7 +80,7 @@ int TpmOpen20(TPM20* tpm, TCTI tctiType) {
     tpm->libTcti = NULL;
     tpm->context = NULL;
 
-    if (tctiType == LEGACY) {
+    if (tctiType == SOCKET_LEGACY || tctiType == ABRMD_LEGACY) {
         //TSS2_LEGACY = 1;
         tpm->legacy = 1;
         tpm->libTss2 = dlopen(LIB_SAPI, RTLD_LAZY);
@@ -81,28 +88,49 @@ int TpmOpen20(TPM20* tpm, TCTI tctiType) {
             return -2;
         }
         abiv = &abiLegacy;
-        tpm->libTcti = dlopen(LIB_TCTI_SOCKET_LEGACY, RTLD_LAZY);
+        tpm->libTcti = tctiType == SOCKET_LEGACY ? dlopen(LIB_TCTI_SOCKET_LEGACY, RTLD_LAZY) : dlopen(LIB_TCTI_TABRMD_LEGACY, RTLD_LAZY);
         if (tpm->libTcti == NULL) {
             return -3;
         }
-        TCTI_SOCKET_CONF conf = {
-            .hostname = "127.0.0.1",
-            .port = 2323
-        };
-        LEGACY_INIT_FN fn = (LEGACY_INIT_FN)dlsym(tpm->libTcti, "InitSocketTcti");
-        if (fn == NULL) {
-            return -4;
-        }
-        size_t size;
-        TPM2_RC rc = fn(NULL, &size, &conf, 0);
-        tpm->tcti = (TSS2_TCTI_CONTEXT*)calloc(size, 1);
-        if (tpm->tcti == NULL) {
-            return -5;
-        }
-        // call init again
-        rc = fn(tpm->tcti, &size, &conf, 0);
-        if (rc != TPM2_RC_SUCCESS) {
-            return -6;
+        if (tctiType == SOCKET_LEGACY) {
+            TCTI_SOCKET_CONF conf = {
+                .hostname = "127.0.0.1",
+                .port = 2323
+            };
+            SOCKET_LEGACY_INIT_FN fn = (SOCKET_LEGACY_INIT_FN)dlsym(tpm->libTcti, "InitSocketTcti");
+            size_t size;
+            TPM2_RC rc = fn(NULL, &size, &conf, 0);
+            if (fn == NULL) {
+                return -4;
+            }
+            tpm->tcti = (TSS2_TCTI_CONTEXT*)calloc(size, 1);
+            if (tpm->tcti == NULL) {
+                return -5;
+            }
+            // call init again
+            rc = fn(tpm->tcti, &size, &conf, 0);
+            if (rc != TPM2_RC_SUCCESS) {
+                return -6;
+            }
+        } else {
+            TCTI_DEVICE_CONF conf = {
+                .device_path = "/dev/tpm0"
+            };
+            TABRMD_LEGACY_INIT_FN fn = (TABRMD_LEGACY_INIT_FN)dlsym(tpm->libTcti, "tss2_tcti_tabrmd_init");
+            size_t size;
+            TPM2_RC rc = fn(NULL, &size);
+            if (fn == NULL) {
+                return -4;
+            }
+            tpm->tcti = (TSS2_TCTI_CONTEXT*)calloc(size, 1);
+            if (tpm->tcti == NULL) {
+                return -5;
+            }
+            // call init again
+            rc = fn(tpm->tcti, &size);
+            if (rc != TPM2_RC_SUCCESS) {
+                return -6;
+            }
         }
     } else if(tctiType == ABRMD || tctiType == SOCKET) {
         tpm->legacy = 0;
@@ -113,9 +141,9 @@ int TpmOpen20(TPM20* tpm, TCTI tctiType) {
         }
         const char* tctiName = tctiType == ABRMD ? LIB_TCTI_TABRMD : LIB_TCTI_MSSIM;
         if (tctiType == ABRMD)
-            tpm->libTcti = dlopen(LIB_TCTI_TABRMD, RTLD_LAZY) ?: dlopen(LIB_TCTI_TABRMD_LEGACY, RTLD_LAZY);
+            tpm->libTcti = dlopen(LIB_TCTI_TABRMD, RTLD_LAZY);
         else 
-            tpm->libTcti = dlopen(LIB_TCTI_MSSIM, RTLD_LAZY) ?: dlopen(LIB_TCTI_SOCKET_LEGACY, RTLD_LAZY);
+            tpm->libTcti = dlopen(LIB_TCTI_MSSIM, RTLD_LAZY);
         if (tpm->libTcti == NULL) {
             return -8;
         }

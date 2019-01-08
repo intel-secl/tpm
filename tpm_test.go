@@ -41,7 +41,7 @@ func TestTpm12(t *testing.T) {
 func TestTpm20Legacy(t *testing.T) {
 	Config.UseSimulator = true
 	Config.SimulatorVersion = V20
-	Config.V20.Tcti = Legacy
+	Config.V20.Tcti = SocketLegacy
 
 	tpm, err := Open()
 	assert.NoError(t, err)

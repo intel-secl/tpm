@@ -37,9 +37,10 @@ typedef struct CertifiedKey20 {
 } CertifiedKey20;
 
 typedef enum TCTI {
-    LEGACY,
+    SOCKET_LEGACY,
+    ABRMD_LEGACY,
+    SOCKET,
     ABRMD,
-    SOCKET
 } TCTI;
 
 int TpmOpen20(TPM20 *tpm, TCTI tctiType);

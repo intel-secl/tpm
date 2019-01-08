@@ -89,11 +89,13 @@ type Tcti int
 
 const (
 	// Legacy refers to old TPM 2.0 resourcemgr tcti
-	Legacy Tcti = iota
+	SocketLegacy Tcti = iota
 	// Abrmd refefs to TPM 2.0 modern access broker tcti
-	Abrmd
+	AbrmdLegacy
 	// Socket refers to TPM 2.0 modern socket tcti
 	Socket
+	// Abrmd refers to TPM 2.0 modern Abrmd tcti
+	Abrmd
 )
 
 // Config is a global config var for specifying TPM 2.0 TCTI configurations
@@ -111,10 +113,10 @@ var Config struct {
 
 // impolicitly alled on package initialization
 func init() {
-	useSim, err := strconv.ParseBool(os.Getenv("USE_TPM_SIM"))
+	useSim, err := strconv.ParseBool(os.Getenv("FORCE_TPM_VER"))
 	if err == nil {
 		Config.UseSimulator = useSim
-		switch simVer := os.Getenv("TPM_SIM_VER"); simVer {
+		switch simVer := os.Getenv("TPM_VER"); simVer {
 		case "V12":
 		case "1.2":
 			Config.SimulatorVersion = V12
@@ -122,15 +124,17 @@ func init() {
 		case "2.0":
 			Config.SimulatorVersion = V20
 		}
-
-		switch tcti := os.Getenv("TPM_SIM_TCTI"); tcti {
-		case "legacy":
-			Config.V20.Tcti = Legacy
-		case "socket":
-			Config.V20.Tcti = Socket
-		case "abrmd":
-			Config.V20.Tcti = Abrmd
-		}
+	}
+	switch tcti := os.Getenv("TPM_TCTI"); tcti {
+	case "socket-legacy":
+		Config.V20.Tcti = SocketLegacy
+	case "socket":
+		Config.V20.Tcti = Socket
+	case "abrmd":
+		Config.V20.Tcti = Abrmd
+	case "abrmd-legacy":
+	default:
+		Config.V20.Tcti = AbrmdLegacy
 	}
 }
 

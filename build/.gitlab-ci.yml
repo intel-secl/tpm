@@ -9,6 +9,7 @@ before_script:
 stages:
   - build
   - test
+  - deploy
 
 test:
   stage: test
@@ -26,3 +27,11 @@ compile:
   stage: build
   script:
     - go build ./...
+
+tool:
+  stage: deploy
+  script:
+    - go build -o tpm cmd/tpm/main.go
+  artifacts:
+    paths:
+      - "tpm"
