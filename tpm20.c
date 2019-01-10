@@ -477,6 +477,22 @@ int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unbound
             }
         }}
     };
+
+    TPMS_AUTH_COMMAND_LEGACY nullAuthCommandLegacy = {
+        .sessionHandle = TPM2_RS_PW,
+        .hmac = {
+            .size = 0
+        },
+        .nonce = {
+            .size = 0
+        }
+    };
+    TPMS_AUTH_COMMAND_LEGACY *legacyTpmsAuth[1] = {&nullAuthCommandLegacy};
+    TSS2_SYS_CMD_AUTHS nullSessionLegacy = {
+        .cmdAuthsCount = 1,
+        .cmdAuths = (void*)&legacyTpmsAuth[0]
+    };
+
     const TPMI_DH_OBJECT srkHandle = 0x81000000;
     TSS2L_SYS_AUTH_COMMAND authSession = {
         .count = 1, .auths = {{
@@ -487,20 +503,44 @@ int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unbound
         }}
     };
     memcpy(authSession.auths[0].hmac.buffer, keyAuth, keyAuthLen);
+
+    TPMS_AUTH_COMMAND_LEGACY keyAuthCmdLegacy = {
+        .sessionHandle = TPM2_RS_PW,
+        .hmac = {
+            .size = keyAuthLen
+        },
+        .nonce = {
+            .size = 0
+        }
+    };
+    memcpy(keyAuthCmdLegacy.hmac.buffer, keyAuth, keyAuthLen);
+    TPMS_AUTH_COMMAND_LEGACY *legacyAuthCmd[1] = {&keyAuthCmdLegacy};
+    TSS2_SYS_CMD_AUTHS authSessionLegacy = {
+        .cmdAuthsCount = 1,
+        .cmdAuths = (void*)&legacyAuthCmd[0]
+    };
     TPM2_HANDLE bindingKeyHandle;
     TSS2L_SYS_AUTH_RESPONSE sessionsDataOut;
     TPM2B_NAME name = {
-        .size = 0
+        .size = sizeof(TPM2B_NAME)-2
+    };
+    TPMS_AUTH_RESPONSE_LEGACY authResponse = {0};
+    TPMS_AUTH_RESPONSE_LEGACY *legacyRspAuths[1] = {&authResponse};
+    TSS2_SYS_RSP_AUTHS sessionsOutLegacy = {
+        .rspAuthsCount = 1,
+        .rspAuths = (void*)&legacyRspAuths[0]
     };
 
     TSS2_RC rc = 0;
-    TPM2B_PRIVATE inPrivate = {};
-    TPM2B_PUBLIC inPublic = {};
+    TPM2B_PRIVATE inPrivate = {
+    };
+    TPM2B_PUBLIC inPublic = {
+    };
     size_t offset = 0;
     CHECK(rc = Tss2_MU_TPM2B_PRIVATE_Unmarshal(inPrivateKey, privateKeyLen, &offset, &inPrivate));
     offset = 0;
     CHECK(rc = Tss2_MU_TPM2B_PUBLIC_Unmarshal(inPublicKey, publicKeyLen, &offset, &inPublic));
-    CHECK(rc = _Tss2_Sys_Load(tpm, srkHandle, &nullSession, &inPrivate, &inPublic, &bindingKeyHandle, &name, &sessionsDataOut));
+    CHECK(rc = _Tss2_Sys_Load(tpm, srkHandle, tpm->legacy ? (const void*)&nullSessionLegacy : &nullSession, &inPrivate, &inPublic, &bindingKeyHandle, &name, tpm->legacy ? (TSS2L_SYS_AUTH_RESPONSE*)&sessionsOutLegacy : &sessionsDataOut));
     TPM2B_PUBLIC_KEY_RSA cipherText = {
         .size = dataLen
     };
@@ -515,9 +555,9 @@ int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unbound
         .size = sizeof(((TPM2B_PUBLIC_KEY_RSA*)0)->buffer)
     };
     TPM2B_DATA label = {
-        .size = 0
+        .size = 0, 
     };
-    CHECK(rc = _Tss2_Sys_RSA_Decrypt(tpm, bindingKeyHandle, &authSession, &cipherText, &scheme, &label, &message, &sessionsDataOut));
+    CHECK(rc = _Tss2_Sys_RSA_Decrypt(tpm, bindingKeyHandle, tpm->legacy ? (const void*)&authSessionLegacy : &authSession, &cipherText, &scheme, &label, &message, tpm->legacy ? (TSS2L_SYS_AUTH_RESPONSE*)&sessionsOutLegacy : &sessionsDataOut));
     *unboundLenOut = message.size;
     *unboundDataOut = (unsigned char*)calloc(message.size, 1);
     if (*unboundDataOut == NULL) {

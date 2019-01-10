@@ -86,7 +86,7 @@ func TestTpm20Legacy(t *testing.T) {
 		pub := bk.RSAPublicKey()
 		rng := rand.Reader
 		message := []byte("foobar")
-		cipher, err := rsa.EncryptOAEP(sha256.New(), rng, pub, message, nil)
+		cipher, err := rsa.EncryptOAEP(sha256.New(), rng, pub, message, []byte{'T', 'C', 'P', 'A'})
 		assert.NoError(t, err)
 		dec, err := tpm.Unbind(bk, []byte{'1', '2', '3', '4'}, cipher)
 		assert.NoError(t, err)
@@ -133,7 +133,7 @@ func TestTpm20(t *testing.T) {
 		pub := bk.RSAPublicKey()
 		rng := rand.Reader
 		message := []byte("foobar")
-		cipher, err := rsa.EncryptOAEP(sha256.New(), rng, pub, message, nil)
+		cipher, err := rsa.EncryptOAEP(sha256.New(), rng, pub, message, []byte{'T', 'C', 'P', 'A'})
 		assert.NoError(err)
 		dec, err := tpm.Unbind(bk, []byte{'1', '2', '3', '4'}, cipher)
 		assert.NoError(err)
