@@ -555,7 +555,8 @@ int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unbound
         .size = sizeof(((TPM2B_PUBLIC_KEY_RSA*)0)->buffer)
     };
     TPM2B_DATA label = {
-        .size = 0, 
+        .size = sizeof("TPM2"),
+        .buffer = "TPM2",
     };
     CHECK(rc = _Tss2_Sys_RSA_Decrypt(tpm, bindingKeyHandle, tpm->legacy ? (const void*)&authSessionLegacy : &authSession, &cipherText, &scheme, &label, &message, tpm->legacy ? (TSS2L_SYS_AUTH_RESPONSE*)&sessionsOutLegacy : &sessionsDataOut));
     *unboundLenOut = message.size;
