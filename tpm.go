@@ -1,12 +1,14 @@
 package tpm
 
-// #cgo CFLAGS: -std=gnu11 -I${SRCDIR}/include/tss2/include -I${SRCDIR}/include/tspi/include -DMAXLOGLEVEL=LOGL_NONE
+// #cgo CFLAGS: -std=gnu11 -I${SRCDIR}/include/tss2/include -I${SRCDIR}/include/tspi/include -DMAXLOGLEVEL=LOGL_DEBUG
 // #cgo LDFLAGS: -ldl
 // #include "tpm.h"
 import "C"
 import (
+	"crypto/rsa"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"strconv"
 	"unsafe"
@@ -29,6 +31,27 @@ type CertifiedKey struct {
 	KeyAttestation []byte
 	// KeyName may be nil if the key comes from a TPM 1.2 chip
 	KeyName []byte
+}
+
+// RSAPublicKey returns a new rsa.PublicKey from the TPM specific bits of the CertifiedKey
+func (ck *CertifiedKey) RSAPublicKey() *rsa.PublicKey {
+	if ck.Version == V12 {
+		mod := new(big.Int)
+		mod.SetBytes(ck.PublicKey)
+		return &rsa.PublicKey{
+			N: mod,
+			E: 65537,
+		}
+	} else {
+		mod := new(big.Int)
+		start := len(ck.PublicKey) - 0x100
+		end := len(ck.PublicKey)
+		mod.SetBytes(ck.PublicKey[start:end])
+		return &rsa.PublicKey{
+			N: mod,
+			E: 65537,
+		}
+	}
 }
 
 // Version enumerates the detected TPM Version. Can be NONE, V12, or V20

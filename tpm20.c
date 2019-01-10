@@ -465,8 +465,18 @@ int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unbound
     }
 
     // CHECK LENS
-
     // load key
+    TSS2L_SYS_AUTH_COMMAND nullSession = {
+        .count = 1, .auths = {{
+            .sessionHandle = TPM2_RS_PW,
+            .hmac = {
+                .size = 0
+            },
+            .nonce = {
+                .size = 0
+            }
+        }}
+    };
     const TPMI_DH_OBJECT srkHandle = 0x81000000;
     TSS2L_SYS_AUTH_COMMAND authSession = {
         .count = 1, .auths = {{
@@ -483,22 +493,23 @@ int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unbound
         .size = 0
     };
 
-    TSS2_RC rc;
-    TPM2B_PRIVATE inPrivate;
-    TPM2B_PUBLIC inPublic;
+    TSS2_RC rc = 0;
+    TPM2B_PRIVATE inPrivate = {};
+    TPM2B_PUBLIC inPublic = {};
     size_t offset = 0;
-    Tss2_MU_TPM2B_PRIVATE_Unmarshal(inPrivateKey, privateKeyLen, &offset, &inPrivate);
+    CHECK(rc = Tss2_MU_TPM2B_PRIVATE_Unmarshal(inPrivateKey, privateKeyLen, &offset, &inPrivate));
     offset = 0;
-    Tss2_MU_TPM2B_PUBLIC_Unmarshal(inPublicKey, publicKeyLen, &offset, &inPublic);
-    CHECK(rc = _Tss2_Sys_Load(tpm, srkHandle, &authSession, &inPrivate, &inPublic, &bindingKeyHandle, &name, &sessionsDataOut));
+    CHECK(rc = Tss2_MU_TPM2B_PUBLIC_Unmarshal(inPublicKey, publicKeyLen, &offset, &inPublic));
+    CHECK(rc = _Tss2_Sys_Load(tpm, srkHandle, &nullSession, &inPrivate, &inPublic, &bindingKeyHandle, &name, &sessionsDataOut));
     TPM2B_PUBLIC_KEY_RSA cipherText = {
         .size = dataLen
     };
     memcpy(cipherText.buffer, data, dataLen);
 
     TPMT_RSA_DECRYPT scheme = {
-        .scheme = TPM2_ALG_RSAES
+        .scheme = TPM2_ALG_OAEP
     };
+    scheme.details.oaep.hashAlg = TPM2_ALG_SHA256;
 
     TPM2B_PUBLIC_KEY_RSA message = {
         .size = sizeof(((TPM2B_PUBLIC_KEY_RSA*)0)->buffer)

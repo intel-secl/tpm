@@ -211,7 +211,8 @@ int TpmUnbind12(TPM12* tpm, unsigned int* unboundLenOut, unsigned char** unbound
     TSS_HKEY        srk         = 0,
                     bk          = 0;
     TSS_HPOLICY     srkPolicy   = 0,
-                    bkPolicy    = 0;
+                    bkPolicy    = 0,
+                    policyEnc   = 0;
     TSS_HENCDATA    encdata     = 0;
     UINT32          unboundLen  = 0;
     BYTE            *unbound    = NULL;
@@ -237,13 +238,16 @@ int TpmUnbind12(TPM12* tpm, unsigned int* unboundLenOut, unsigned char** unbound
     CHECK(rc = Tspi_Context_CreateObject(tpm->context, TSS_OBJECT_TYPE_RSAKEY, TSS_KEY_TYPE_BIND | TSS_KEY_SIZE_2048  | TSS_KEY_VOLATILE | TSS_KEY_AUTHORIZATION | TSS_KEY_NOT_MIGRATABLE, &bk));
     CHECK(rc = Tspi_Context_LoadKeyByBlob(tpm->context, srk, privateKeyLen, (BYTE*)inKey, &bk));
     CHECK(rc = Tspi_Context_CreateObject(tpm->context, TSS_OBJECT_TYPE_POLICY, TSS_POLICY_USAGE, &bkPolicy));
+    CHECK(rc = Tspi_Policy_SetSecret(bkPolicy, TSS_SECRET_MODE_PLAIN, keyAuthLen, (BYTE*)keyAuth));
     CHECK(rc = Tspi_Policy_AssignToObject(bkPolicy, bk));
 
     // Load the (encrypted) data blob
 
     CHECK(rc = Tspi_Context_CreateObject(tpm->context, TSS_OBJECT_TYPE_ENCDATA, TSS_ENCDATA_BIND, &encdata));    
-    CHECK(rc = Tspi_SetAttribData(encdata, TSS_TSPATTRIB_ENCDATA_BLOB, TSS_TSPATTRIB_ENCDATA_BLOB, dataLen, (BYTE*)data));
-
+    CHECK(rc = Tspi_SetAttribData(encdata, TSS_TSPATTRIB_ENCDATA_BLOB, TSS_TSPATTRIB_ENCDATABLOB_BLOB, dataLen, (BYTE*)data));
+    // CHECK(rc = Tspi_Context_CreateObject(tpm->context, TSS_OBJECT_TYPE_POLICY, TSS_POLICY_USAGE, &policyEnc));
+    // CHECK(rc = Tspi_Policy_SetSecret(policyEnc, TSS_SECRET_MODE_PLAIN, 0, NULL))
+    // CHECK(rc = Tspi_Policy_AssignToObject(policyEnc, encdata));
     // Unbind the blob
     CHECK(rc = Tspi_Data_Unbind(encdata, bk, &unboundLen, &unbound));
     // copy the unbound into out;
@@ -269,6 +273,9 @@ out:
         }
         if (bkPolicy) {
             Tspi_Context_CloseObject(tpm->context, bkPolicy);
+        }
+        if (policyEnc) {
+            Tspi_Context_CloseObject(tpm->context, policyEnc);
         }
 
         if (encdata) {
