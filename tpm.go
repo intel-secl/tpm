@@ -1,6 +1,6 @@
 package tpm
 
-// #cgo CFLAGS: -std=gnu11 -I${SRCDIR}/include/tss2/include -I${SRCDIR}/include/tspi/include -DMAXLOGLEVEL=LOGL_DEBUG
+// #cgo CFLAGS: -std=gnu11 -I${SRCDIR}/include/tss2/include -I${SRCDIR}/include/tspi/include -DMAXLOGLEVEL=LOGL_INFO
 // #cgo LDFLAGS: -ldl
 // #include "tpm.h"
 import "C"

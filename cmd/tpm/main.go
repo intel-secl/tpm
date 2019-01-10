@@ -59,14 +59,57 @@ func createCertifiedKey() {
 }
 
 func unbind() {
-	fmt.Println("Not yet supported")
+	args := os.Args[2:]
+	if len(args) != 4 {
+		printUsage()
+		return
+	}
+
+	t, err := tpm.Open()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer t.Close()
+	keyAuth, err := hex.DecodeString(args[0])
+	if err != nil {
+		log.Fatal(err)
+	}
+	pub, err := hex.DecodeString(args[1])
+	if err != nil {
+		log.Fatal(err)
+	}
+	prv, err := hex.DecodeString(args[2])
+	if err != nil {
+		log.Fatal(err)
+	}
+	encData, err := hex.DecodeString(args[3])
+	if err != nil {
+		log.Fatal(err)
+	}
+	var ver tpm.Version
+	_, ok := t.(*tpm.Tpm20)
+	if ok {
+		ver = tpm.V20
+	} else {
+		ver = tpm.V12
+	}
+	ck := tpm.CertifiedKey{
+		Version:    ver,
+		PublicKey:  pub,
+		PrivateKey: prv,
+	}
+	data, err := t.Unbind(&ck, keyAuth, encData)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println("Plain text:\n", hex.EncodeToString(data))
 }
 
 func printUsage() {
 	fmt.Println(os.Args[0], "[options]")
 	fmt.Println("CreateCertifiedKey <usage := bind|sign> <keyAuth := hexstring> <aikAuth := hexstring>")
 	fmt.Println("\tOutput: <publicKey, privateKey, keySignature, keyAttestation, keyName:optional>")
-	fmt.Println("Unbind <privateKey> <encrypteddata>")
+	fmt.Println("Unbind <keyAuth> <publicKey> <privateKey> <encrypteddata>")
 	fmt.Println("\tOutput: <decrypteddata>")
 }
 
