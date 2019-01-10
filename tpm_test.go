@@ -35,7 +35,7 @@ func TestTpm12(t *testing.T) {
 		pub := bk.RSAPublicKey()
 		rng := rand.Reader
 		message := []byte{
-			1, 1, 1, 1, // version
+			1, 1, 0, 0, // version
 			2, // TPM_PT_BIND
 			'f', 'o', 'o', 'b', 'a', 'r',
 		}
