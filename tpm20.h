@@ -46,6 +46,14 @@ typedef enum TCTI {
 int TpmOpen20(TPM20 *tpm, TCTI tctiType);
 void TpmClose20(TPM20 *tpm);
 int TpmCreateCertifiedKey20(TPM20* tpm, CertifiedKey20* keyOut, Usage usage, unsigned int keyAuthSize, unsigned char keyAuth[], unsigned int parentAuthSize, const unsigned char parentAuth[]);
-int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unboundDataOut, unsigned int privateKeyLen , const unsigned char* inPrivateKey, unsigned int publicKeyLen, const unsigned char* inPublicKey, unsigned int keyAuthLen, const unsigned char* keyAuth, unsigned int dataLen, const unsigned char* data);
-
+int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unboundDataOut, 
+    unsigned int keyAuthLen, const unsigned char* keyAuth,
+    unsigned int privateKeyLen , const unsigned char* inPrivateKey, 
+    unsigned int publicKeyLen, const unsigned char* inPublicKey,
+    unsigned int dataLen, const unsigned char* data);
+int TpmSign20(TPM20* tpm, unsigned int* signatureSizeOut, unsigned char** signatureOut, 
+    const unsigned int keyAuthLen, const unsigned char* keyAuth,
+    const unsigned int privateKeyLen, const unsigned char* privateKey,
+    const unsigned int publicKeyLen, const unsigned char* publicKey,
+    const unsigned int hashSize, const unsigned char* hash);
 #endif

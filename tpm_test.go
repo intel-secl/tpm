@@ -1,6 +1,9 @@
+// +build integration
+
 package tpm
 
 import (
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -50,6 +53,18 @@ func TestTpm12(t *testing.T) {
 		if err != nil {
 			return
 		}
+
+		// test sign
+		signMessage := []byte("foobar")
+		sig, err := tpm.Sign(sk, []byte{'1', '2', '3', '4'}, signMessage)
+		assert.NoError(t, err)
+
+		// validate that the sig matches
+		hashed := sha1.Sum(signMessage)
+		pub = sk.RSAPublicKey()
+		err = rsa.VerifyPKCS1v15(pub, crypto.SHA1, hashed[:], sig)
+		assert.NoError(t, err)
+
 		assert.NotEmpty(t, sk.PublicKey)
 		assert.NotEmpty(t, sk.PrivateKey)
 		assert.NotEmpty(t, sk.KeySignature)
@@ -97,6 +112,18 @@ func TestTpm20Legacy(t *testing.T) {
 		if err != nil {
 			return
 		}
+
+		// test sign
+		signMessage := []byte("foobar")
+		sig, err := tpm.Sign(sk, []byte{'1', '2', '3', '4'}, signMessage)
+		assert.NoError(t, err)
+
+		// validate that the sig matches
+		hashed := sha256.Sum256(signMessage)
+		pub = sk.RSAPublicKey()
+		err = rsa.VerifyPKCS1v15(pub, crypto.SHA256, hashed[:], sig)
+		assert.NoError(t, err)
+
 		assert.NotEmpty(t, sk.PublicKey)
 		assert.NotEmpty(t, sk.PrivateKey)
 		assert.NotEmpty(t, sk.KeySignature)
@@ -138,11 +165,23 @@ func TestTpm20(t *testing.T) {
 		dec, err := tpm.Unbind(bk, []byte{'1', '2', '3', '4'}, cipher)
 		assert.NoError(err)
 		assert.Equal(message, dec)
+
 		sk, err := tpm.CreateCertifiedKey(Signing, []byte{'1', '2', '3', '4'}, []byte{'5', '6', '7', '8'})
 		assert.NoError(err)
 		if err != nil {
 			return
 		}
+
+		// test sign
+		signMessage := []byte("foobar")
+		sig, err := tpm.Sign(sk, []byte{'1', '2', '3', '4'}, signMessage)
+		assert.NoError(err)
+
+		// validate that the sig matches
+		hashed := sha256.Sum256(signMessage)
+		pub = sk.RSAPublicKey()
+		err = rsa.VerifyPKCS1v15(pub, crypto.SHA256, hashed[:], sig)
+		assert.NoError(err)
 		assert.NotEmpty(sk.PublicKey)
 		assert.NotEmpty(sk.PrivateKey)
 		assert.NotEmpty(sk.KeySignature)

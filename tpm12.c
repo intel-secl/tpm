@@ -206,7 +206,10 @@ out:
     return (int)rc;
 }
 
-int TpmUnbind12(TPM12* tpm, unsigned int* unboundLenOut, unsigned char** unboundDataOut, unsigned int privateKeyLen , const unsigned char* inKey, unsigned int keyAuthLen, const unsigned char* keyAuth, unsigned int dataLen, const unsigned char* data) {
+int TpmUnbind12(TPM12* tpm, unsigned int* unboundLenOut, unsigned char** unboundDataOut, 
+    unsigned int keyAuthLen, const unsigned char* keyAuth, 
+    unsigned int privateKeyLen , const unsigned char* inKey, 
+    unsigned int dataLen, const unsigned char* data) {
     TSS_RESULT      rc          = 0;
     TSS_HKEY        srk         = 0,
                     bk          = 0;
@@ -284,6 +287,88 @@ out:
 
         if (unbound) {
             Tspi_Context_FreeMemory(tpm->context, unbound);
+        }
+    }
+
+    return rc;
+}
+
+int TpmSign12(TPM12* tpm, unsigned int* signatureSizeOut, unsigned char** signatureOut,
+ const unsigned int keyAuthLen, const unsigned char* keyAuth, 
+ const unsigned int privateKeyLen, const unsigned char* privateKey,
+ const unsigned int dataSize, const unsigned char* data) {
+     if (signatureOut == NULL) {
+         return -1;
+     }
+     if (keyAuth == NULL) {
+         return -2;
+     } 
+     if (privateKey == NULL) {
+         return -3;
+     }
+     if (data == NULL) {
+         return -4;
+     }
+
+     if (dataSize != 20) {
+         return -5;
+     }
+
+    TSS_RESULT      rc              = 0;
+    TSS_HKEY        srk             = 0,
+                    signingKey      = 0;
+    TSS_HHASH       hash            = 0;
+    TSS_HPOLICY     srkPolicy       = 0,
+                    signKeyPolicy   = 0,
+                    policyEnc       = 0;
+
+    CHECK(rc = loadSrk(tpm, &srk, &srkPolicy));
+     // load signing key
+    CHECK(rc = Tspi_Context_CreateObject(tpm->context, TSS_OBJECT_TYPE_RSAKEY, TSS_KEY_TYPE_SIGNING | TSS_KEY_SIZE_2048  | TSS_KEY_VOLATILE | TSS_KEY_AUTHORIZATION | TSS_KEY_NOT_MIGRATABLE, &signingKey));
+    CHECK(rc = Tspi_Context_LoadKeyByBlob(tpm->context, srk, privateKeyLen, (BYTE*)privateKey, &signingKey));
+    CHECK(rc = Tspi_Context_CreateObject(tpm->context, TSS_OBJECT_TYPE_POLICY, TSS_POLICY_USAGE, &signKeyPolicy));
+    CHECK(rc = Tspi_Policy_SetSecret(signKeyPolicy, TSS_SECRET_MODE_PLAIN, keyAuthLen, (BYTE*)keyAuth));
+    CHECK(rc = Tspi_Policy_AssignToObject(signKeyPolicy, signingKey));
+
+    // hash the data
+    CHECK(rc = Tspi_Context_CreateObject(tpm->context, TSS_OBJECT_TYPE_HASH, TSS_HASH_SHA1, &hash));
+    CHECK(rc = Tspi_Hash_SetHashValue(hash, 20, (BYTE*)data));
+
+    UINT32 sigSize;
+    BYTE* sigBlob = NULL;
+    // Sign the data
+    CHECK(rc = Tspi_Hash_Sign(hash, signingKey, &sigSize, &sigBlob));
+    *signatureSizeOut = sigSize;
+    *signatureOut = malloc(sigSize);
+    if (*signatureOut == NULL) {
+        rc = -6;
+        goto out;
+    }
+    memcpy(*signatureOut, sigBlob, sigSize);
+
+out:
+    // Clean up all objects
+    if (tpm && tpm->context) {
+        if (srk) {
+            Tspi_Context_CloseObject(tpm->context, srk);
+        }
+        if (signingKey) {
+            Tspi_Context_CloseObject(tpm->context, signingKey);
+        } 
+        if (srkPolicy) {
+            Tspi_Context_CloseObject(tpm->context, srkPolicy);
+        }
+        if (signKeyPolicy) {
+            Tspi_Context_CloseObject(tpm->context, signKeyPolicy);
+        }
+        if (policyEnc) {
+            Tspi_Context_CloseObject(tpm->context, policyEnc);
+        }
+        if (hash) {
+            Tspi_Context_CloseObject(tpm->context, hash);
+        }
+        if (sigBlob) {
+            Tspi_Context_FreeMemory(tpm->context, sigBlob);
         }
     }
 

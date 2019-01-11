@@ -33,6 +33,12 @@ typedef struct CertifiedKey12 {
 int TpmOpen12(TPM12* tpm);
 void TpmClose12(TPM12* tpm);
 int TpmCreateCertifiedKey12(TPM12* tpm, CertifiedKey12* keyOut, Usage usage, unsigned int keyAuthSize, const unsigned char keyAuth[], unsigned int parentAuthSize, const unsigned char parentAuth[]);
-int TpmUnbind12(TPM12* tpm, unsigned int* unboundLenOut, unsigned char** unboundDataOut, unsigned int privateKeyLen , const unsigned char* inKey, unsigned int keyAuthLen, const unsigned char* keyAuth, unsigned int dataLen, const unsigned char* data);
-
+int TpmUnbind12(TPM12* tpm, unsigned int* unboundLenOut, unsigned char** unboundDataOut,
+ unsigned int keyAuthLen, const unsigned char* keyAuth,
+ unsigned int privateKeyLen , const unsigned char* inKey, 
+  unsigned int dataLen, const unsigned char* data);
+int TpmSign12(TPM12* tpm, unsigned int* signatureSizeOut, unsigned char** signatureOut,
+ const unsigned int keyAuthLen, const unsigned char* keyAuth, 
+ const unsigned int privateKeyLen, const unsigned char* privateKey,
+ const unsigned int dataSize, const unsigned char* data);
 #endif

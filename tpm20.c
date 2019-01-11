@@ -443,7 +443,11 @@ out:
     return rc;
 }
 
-int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unboundDataOut, unsigned int privateKeyLen , const unsigned char* inPrivateKey, unsigned int publicKeyLen, const unsigned char* inPublicKey, unsigned int keyAuthLen, const unsigned char* keyAuth, unsigned int dataLen, const unsigned char* data) {
+int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unboundDataOut, 
+    unsigned int keyAuthLen, const unsigned char* keyAuth, 
+    unsigned int privateKeyLen , const unsigned char* inPrivateKey, 
+    unsigned int publicKeyLen, const unsigned char* inPublicKey, 
+    unsigned int dataLen, const unsigned char* data) {
     // Validate arguments
     if (tpm == NULL) {
         return -1;
@@ -463,8 +467,10 @@ int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unbound
     if (data == NULL) {
         return -6;
     }
-
     // CHECK LENS
+    if (keyAuthLen > sizeof(((TPM2B_AUTH*)0)->buffer)) {
+        return -7;
+    }
     // load key
     TSS2L_SYS_AUTH_COMMAND nullSession = {
         .count = 1, .auths = {{
@@ -568,5 +574,139 @@ int TpmUnbind20(TPM20* tpm, unsigned int* unboundLenOut, unsigned char** unbound
     memcpy(*unboundDataOut, message.buffer, message.size);
 out:
     _Tss2_Sys_FlushContext(tpm, bindingKeyHandle);
+    return rc;
+}
+
+int TpmSign20(TPM20* tpm, unsigned int* signatureSizeOut, unsigned char** signatureOut,
+    const unsigned int keyAuthLen, const unsigned char* keyAuth, 
+    const unsigned int privateKeyLen, const unsigned char* privateKey,
+    const unsigned int publicKeyLen, const unsigned char* publicKey,
+    const unsigned int dataSize, const unsigned char* data) {
+    
+    if (tpm == NULL) {
+        return -1;
+    }
+    if (signatureSizeOut == NULL) {
+        return -2;
+    }
+    if (signatureOut == NULL) {
+        return -3;
+    }
+    if (keyAuth == NULL) {
+        return -4;
+    }
+    if (privateKey == NULL) {
+        return -5;
+    }
+    if (publicKey == NULL) {
+        return -6;
+    }
+    if (data == NULL) {
+        return -7;
+    }
+    if (keyAuthLen > sizeof(((TPM2B_AUTH*)0)->buffer)) {
+        return -8;
+    }
+    if (dataSize != 32) {
+        return -9;
+    }
+
+    // load keys
+    TSS2L_SYS_AUTH_COMMAND nullSession = {
+        .count = 1, .auths = {{
+            .sessionHandle = TPM2_RS_PW,
+            .hmac = {
+                .size = 0
+            },
+            .nonce = {
+                .size = 0
+            }
+        }}
+    };
+
+    TPMS_AUTH_COMMAND_LEGACY nullAuthCommandLegacy = {
+        .sessionHandle = TPM2_RS_PW,
+        .hmac = {
+            .size = 0
+        },
+        .nonce = {
+            .size = 0
+        }
+    };
+    TPMS_AUTH_COMMAND_LEGACY *legacyTpmsAuth[1] = {&nullAuthCommandLegacy};
+    TSS2_SYS_CMD_AUTHS nullSessionLegacy = {
+        .cmdAuthsCount = 1,
+        .cmdAuths = (void*)&legacyTpmsAuth[0]
+    };
+
+    const TPMI_DH_OBJECT srkHandle = 0x81000000;
+    TSS2L_SYS_AUTH_COMMAND authSession = {
+        .count = 1, .auths = {{
+            .sessionHandle = TPM2_RS_PW,
+                .hmac = {
+                    .size = keyAuthLen
+                },
+        }}
+    };
+    memcpy(authSession.auths[0].hmac.buffer, keyAuth, keyAuthLen);
+
+    TPMS_AUTH_COMMAND_LEGACY keyAuthCmdLegacy = {
+        .sessionHandle = TPM2_RS_PW,
+        .hmac = {
+            .size = keyAuthLen
+        },
+        .nonce = {
+            .size = 0
+        }
+    };
+    memcpy(keyAuthCmdLegacy.hmac.buffer, keyAuth, keyAuthLen);
+    TPMS_AUTH_COMMAND_LEGACY *legacyAuthCmd[1] = {&keyAuthCmdLegacy};
+    TSS2_SYS_CMD_AUTHS authSessionLegacy = {
+        .cmdAuthsCount = 1,
+        .cmdAuths = (void*)&legacyAuthCmd[0]
+    };
+    TPM2_HANDLE signingKeyHandle = 0;
+    TPM2B_NAME name = {
+        .size = sizeof(TPM2B_NAME)-2
+    };
+    TSS2_RC rc = 0;
+    TPM2B_PRIVATE inPrivate = {
+    };
+    TPM2B_PUBLIC inPublic = {
+    };
+    size_t offset = 0;
+    CHECK(rc = Tss2_MU_TPM2B_PRIVATE_Unmarshal(privateKey, privateKeyLen, &offset, &inPrivate));
+    offset = 0;
+    CHECK(rc = Tss2_MU_TPM2B_PUBLIC_Unmarshal(publicKey, publicKeyLen, &offset, &inPublic));
+    CHECK(rc = _Tss2_Sys_Load(tpm, srkHandle, tpm->legacy ? (const void*)&nullSessionLegacy : &nullSession, 
+                                &inPrivate, &inPublic, &signingKeyHandle, &name, NULL));
+
+    TPM2B_MAX_BUFFER dataIn;
+    dataIn.size = dataSize;
+    memcpy(dataIn.buffer, data, dataSize);
+    TPM2B_DIGEST hash;
+    hash.size = 32;
+    memcpy(hash.buffer, data, 32);
+    TPMT_SIG_SCHEME scheme = {
+        .scheme = TPM2_ALG_RSASSA
+    };
+    scheme.details.rsassa.hashAlg = TPM2_ALG_SHA256;
+    TPMT_SIGNATURE sig;
+    TPMT_TK_HASHCHECK validation = {
+        .tag = TPM2_ST_HASHCHECK,
+        .hierarchy = TPM2_RH_NULL,
+    };
+    CHECK(rc = _Tss2_Sys_Sign(tpm, signingKeyHandle, tpm->legacy ? (const void*)&authSessionLegacy : &authSession, 
+                                &hash /*digest*/, &scheme /* sig scheme */, &validation /* TK_HAHSHCHECK*/, &sig /*SIG*/,
+                               NULL));
+    *signatureSizeOut = sig.signature.rsassa.sig.size;
+    *signatureOut = (unsigned char*)malloc(sig.signature.rsassa.sig.size);
+    if (*signatureOut == NULL) {
+        rc = -10;
+        goto out;
+    }
+    memcpy(*signatureOut, sig.signature.rsassa.sig.buffer, sig.signature.rsassa.sig.size);
+out: 
+    _Tss2_Sys_FlushContext(tpm, signingKeyHandle);
     return rc;
 }

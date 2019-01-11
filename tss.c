@@ -126,3 +126,35 @@ TSS_RESULT Tspi_Data_Unbind(TSS_HENCDATA hEncData, TSS_HKEY hKey, UINT32 *pulUnb
     TSS_RESULT (*ptr)(TSS_HENCDATA, TSS_HKEY, UINT32*, BYTE**) = RESOLVE(Tspi_Data_Unbind);
     return ptr(hEncData, hKey, pulUnboundDataLength, prgbUnboundData);
 }
+
+TSS_RESULT Tspi_Hash_Sign
+(
+    TSS_HHASH           hHash,                         // in
+    TSS_HKEY            hKey,                          // in
+    UINT32*             pulSignatureLength,            // out
+    BYTE**              prgbSignature                  // out
+) {
+    TSS_RESULT (*ptr)(TSS_HHASH, TSS_HKEY, UINT32*, BYTE**) = RESOLVE(Tspi_Hash_Sign);
+    return ptr(hHash, hKey, pulSignatureLength, prgbSignature);
+}
+
+TSPICALL Tspi_Hash_UpdateHashValue
+(
+    TSS_HHASH           hHash,                         // in
+    UINT32              ulDataLength,                  // in
+    BYTE*               rgbData                        // in
+) {
+    TSS_RESULT (*ptr)(TSS_HHASH, UINT32, BYTE*) = RESOLVE(Tspi_Hash_UpdateHashValue);
+    return ptr(hHash, ulDataLength, rgbData);
+}
+
+TSPICALL Tspi_Hash_SetHashValue
+(
+    TSS_HHASH           hHash,                         // in
+    UINT32              ulHashValueLength,             // in
+    BYTE*               rgbHashValue                   // in
+) {
+    TSS_RESULT (*ptr)(TSS_HHASH, UINT32, BYTE*) = RESOLVE(Tspi_Hash_SetHashValue);
+    return ptr(hHash, ulHashValueLength, rgbHashValue);
+}
+

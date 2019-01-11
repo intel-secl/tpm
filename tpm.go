@@ -1,11 +1,13 @@
 package tpm
 
-// #cgo CFLAGS: -std=gnu11 -I${SRCDIR}/include/tss2/include -I${SRCDIR}/include/tspi/include -DMAXLOGLEVEL=LOGL_INFO
+// #cgo CFLAGS: -std=gnu11 -I${SRCDIR}/include/tss2/include -I${SRCDIR}/include/tspi/include -DMAXLOGLEVEL=LOGL_NONE
 // #cgo LDFLAGS: -ldl
 // #include "tpm.h"
 import "C"
 import (
 	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"math/big"
@@ -18,6 +20,7 @@ import (
 type Tpm interface {
 	CreateCertifiedKey(usage Usage, keyAuth []byte, aikAuth []byte) (*CertifiedKey, error)
 	Unbind(ck *CertifiedKey, keyAuth []byte, encData []byte) ([]byte, error)
+	Sign(ck *CertifiedKey, keyAuth []byte, data []byte) ([]byte, error)
 	Close()
 }
 
@@ -285,8 +288,8 @@ func (t *Tpm12) Unbind(ck *CertifiedKey, keyAuth []byte, encData []byte) ([]byte
 	var unboundData *C.uchar
 	defer C.free(unsafe.Pointer(unboundData))
 	rc := C.TpmUnbind12((*C.TPM12)(t), &unboundLen, &unboundData,
-		C.uint(len(ck.PrivateKey)), (*C.uchar)(unsafe.Pointer(&ck.PrivateKey[0])),
 		C.uint(len(keyAuth)), (*C.uchar)(unsafe.Pointer(&keyAuth[0])),
+		C.uint(len(ck.PrivateKey)), (*C.uchar)(unsafe.Pointer(&ck.PrivateKey[0])),
 		C.uint(len(encData)), (*C.uchar)(unsafe.Pointer(&encData[0])))
 	if rc == 0 {
 		return C.GoBytes(unsafe.Pointer(unboundData), C.int(unboundLen)), nil
@@ -312,9 +315,9 @@ func (t *Tpm20) Unbind(ck *CertifiedKey, keyAuth []byte, encData []byte) ([]byte
 	var unboundData *C.uchar
 	defer C.free(unsafe.Pointer(unboundData))
 	rc := C.TpmUnbind20((*C.TPM20)(t), &unboundLen, &unboundData,
+		C.uint(len(keyAuth)), (*C.uchar)(unsafe.Pointer(&keyAuth[0])),
 		C.uint(len(ck.PrivateKey)), (*C.uchar)(unsafe.Pointer(&ck.PrivateKey[0])),
 		C.uint(len(ck.PublicKey)), (*C.uchar)(unsafe.Pointer(&ck.PublicKey[0])),
-		C.uint(len(keyAuth)), (*C.uchar)(unsafe.Pointer(&keyAuth[0])),
 		C.uint(len(encData)), (*C.uchar)(unsafe.Pointer(&encData[0])))
 	if rc == 0 {
 		return C.GoBytes(unsafe.Pointer(unboundData), C.int(unboundLen)), nil
@@ -330,4 +333,39 @@ func (t *Tpm12) Close() {
 // Close finalizes a tpm object
 func (t *Tpm20) Close() {
 	C.TpmClose20((*C.TPM20)(t))
+}
+
+// Sign signs a blob of data using a TPM 1.2 Signing Key. A SHA1 sum of the data will be generated,
+// and then signed with the private portion of the Signing Key
+func (t *Tpm12) Sign(ck *CertifiedKey, keyAuth []byte, data []byte) ([]byte, error) {
+	var sigLen C.uint
+	var sig *C.uchar
+	hash := sha1.Sum(data)
+	defer C.free(unsafe.Pointer(sig))
+	rc := C.TpmSign12((*C.TPM12)(t), &sigLen, &sig,
+		C.uint(len(keyAuth)), (*C.uchar)(unsafe.Pointer(&keyAuth[0])),
+		C.uint(len(ck.PrivateKey)), (*C.uchar)(unsafe.Pointer(&ck.PrivateKey[0])),
+		C.uint(len(hash)), (*C.uchar)(unsafe.Pointer(&hash[0])))
+	if rc == 0 {
+		return C.GoBytes(unsafe.Pointer(sig), C.int(sigLen)), nil
+	}
+	return nil, fmt.Errorf("failed go sign 1.2 data: %d", rc)
+}
+
+// Sign signs a blob of data using a TPM 2.0 Signing Key. A SHA256 sum of the data will be generated, and then signed with
+// the private portion of the Signing Key
+func (t *Tpm20) Sign(ck *CertifiedKey, keyAuth []byte, data []byte) ([]byte, error) {
+	var sigLen C.uint
+	var sig *C.uchar
+	hash := sha256.Sum256(data)
+	defer C.free(unsafe.Pointer(sig))
+	rc := C.TpmSign20((*C.TPM20)(t), &sigLen, &sig,
+		C.uint(len(keyAuth)), (*C.uchar)(unsafe.Pointer(&keyAuth[0])),
+		C.uint(len(ck.PrivateKey)), (*C.uchar)(unsafe.Pointer(&ck.PrivateKey[0])),
+		C.uint(len(ck.PublicKey)), (*C.uchar)(unsafe.Pointer(&ck.PublicKey[0])),
+		C.uint(len(hash)), (*C.uchar)(unsafe.Pointer(&hash[0])))
+	if rc == 0 {
+		return C.GoBytes(unsafe.Pointer(sig), C.int(sigLen)), nil
+	}
+	return nil, fmt.Errorf("failed to sign 2.0 data: %d", rc)
 }

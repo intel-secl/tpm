@@ -147,6 +147,48 @@ TSS2_RC _Tss2_Sys_RSA_Decrypt(TPM20* tpm,
     return ptr(tpm->context, keyHandle, cmdAuthsArray, cipherText, inScheme, label, message, rspAuthsArray);
 }
 
+TSS2_RC _Tss2_Sys_Hash(
+    TPM20* tpm,
+    TSS2L_SYS_AUTH_COMMAND const *cmdAuthsArray,
+    const TPM2B_MAX_BUFFER *data,
+    TPMI_ALG_HASH hashAlg,
+    TPMI_RH_HIERARCHY hierarchy,
+    TPM2B_DIGEST *outHash,
+    TPMT_TK_HASHCHECK *validation,
+    TSS2L_SYS_AUTH_RESPONSE *rspAuthsArray) {
+    
+    TSS2_RC (*ptr)(TSS2_SYS_CONTEXT *,
+    TSS2L_SYS_AUTH_COMMAND const *,
+    const TPM2B_MAX_BUFFER *,
+    TPMI_ALG_HASH ,
+    TPMI_RH_HIERARCHY ,
+    TPM2B_DIGEST *,
+    TPMT_TK_HASHCHECK *,
+    TSS2L_SYS_AUTH_RESPONSE *) = RESOLVE_SYS(tpm, Tss2_Sys_Hash);
+    return ptr(tpm->context, cmdAuthsArray, data, hashAlg, hierarchy, outHash, validation, rspAuthsArray);
+}
+
+TSS2_RC _Tss2_Sys_Sign(
+    TPM20* tpm,
+    TPMI_DH_OBJECT keyHandle,
+    TSS2L_SYS_AUTH_COMMAND const *cmdAuthsArray,
+    const TPM2B_DIGEST *digest,
+    const TPMT_SIG_SCHEME *inScheme,
+    const TPMT_TK_HASHCHECK *validation,
+    TPMT_SIGNATURE *signature,
+    TSS2L_SYS_AUTH_RESPONSE *rspAuthsArray) {
+
+    TSS2_RC (*ptr)(TSS2_SYS_CONTEXT *sysContext,
+    TPMI_DH_OBJECT keyHandle,
+    TSS2L_SYS_AUTH_COMMAND const *cmdAuthsArray,
+    const TPM2B_DIGEST *digest,
+    const TPMT_SIG_SCHEME *inScheme,
+    const TPMT_TK_HASHCHECK *validation,
+    TPMT_SIGNATURE *signature,
+    TSS2L_SYS_AUTH_RESPONSE *rspAuthsArray) = RESOLVE_SYS(tpm, Tss2_Sys_Sign);
+    return ptr(tpm->context, keyHandle, cmdAuthsArray, digest, inScheme, validation, signature, rspAuthsArray);
+}
+
 // Marshaling and unmarshaling
 
 // TSS2_RC
