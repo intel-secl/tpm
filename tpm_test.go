@@ -35,6 +35,12 @@ func TestTpm12(t *testing.T) {
 		assert.Equal(t, bk.Usage, Binding)
 		assert.Equal(t, bk.Version, V12)
 
+		// Test many keys
+		for i := 0; i < 3; i++ {
+			_, err := tpm.CreateCertifiedKey(Binding, []byte{'1', '2', '3', '4'}, []byte{'5', '6', '7', '8'})
+			assert.NoError(t, err)
+		}
+
 		// test unbind
 		pub := bk.RSAPublicKey()
 		rng := rand.Reader
@@ -99,6 +105,12 @@ func TestTpm20Legacy(t *testing.T) {
 		assert.Equal(t, bk.Usage, Binding)
 		assert.Equal(t, bk.Version, V20)
 
+		// Test many keys
+		for i := 0; i < 3; i++ {
+			_, err := tpm.CreateCertifiedKey(Binding, []byte{'1', '2', '3', '4'}, []byte{'5', '6', '7', '8'})
+			assert.NoError(t, err)
+		}
+
 		// test unbind
 		pub := bk.RSAPublicKey()
 		rng := rand.Reader
@@ -136,6 +148,7 @@ func TestTpm20Legacy(t *testing.T) {
 		assert.Equal(t, sk.Version, V20)
 	}
 }
+
 func TestTpm20(t *testing.T) {
 	Config.UseSimulator = true
 	Config.SimulatorVersion = V20
@@ -158,6 +171,12 @@ func TestTpm20(t *testing.T) {
 		assert.NotEmpty(bk.KeyName)
 		assert.Equal(bk.Usage, Binding)
 		assert.Equal(bk.Version, V20)
+
+		// Test many keys
+		for i := 0; i < 3; i++ {
+			_, err := tpm.CreateCertifiedKey(Binding, []byte{'1', '2', '3', '4'}, []byte{'5', '6', '7', '8'})
+			assert.NoError(err)
+		}
 
 		// test unbind
 		pub := bk.RSAPublicKey()
