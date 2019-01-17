@@ -577,11 +577,26 @@ out:
     return rc;
 }
 
+TPM2_ALG_ID GoHash2TpmHash(int algId) {
+    switch (algId) {
+        case 3:
+            return TPM2_ALG_SHA1;
+        case 5:
+            return TPM2_ALG_SHA256;
+        case 6:
+            return TPM2_ALG_SHA384;
+        case 7:
+            return TPM2_ALG_SHA512;
+        default:
+            return 0;
+    }
+} 
+
 int TpmSign20(TPM20* tpm, unsigned int* signatureSizeOut, unsigned char** signatureOut,
     const unsigned int keyAuthLen, const unsigned char* keyAuth, 
     const unsigned int privateKeyLen, const unsigned char* privateKey,
     const unsigned int publicKeyLen, const unsigned char* publicKey,
-    const unsigned int dataSize, const unsigned char* data) {
+    const unsigned int dataSize, const unsigned char* data, int algId) {
     
     if (tpm == NULL) {
         return -1;
@@ -607,8 +622,13 @@ int TpmSign20(TPM20* tpm, unsigned int* signatureSizeOut, unsigned char** signat
     if (keyAuthLen > sizeof(((TPM2B_AUTH*)0)->buffer)) {
         return -8;
     }
-    if (dataSize != 32) {
+    if (dataSize != 48) {
         return -9;
+    }
+
+    TPM2_ALG_ID hashAlg = GoHash2TpmHash(algId);
+    if (hashAlg == 0) {
+        return -10;
     }
 
     // load keys
@@ -685,12 +705,12 @@ int TpmSign20(TPM20* tpm, unsigned int* signatureSizeOut, unsigned char** signat
     dataIn.size = dataSize;
     memcpy(dataIn.buffer, data, dataSize);
     TPM2B_DIGEST hash;
-    hash.size = 32;
-    memcpy(hash.buffer, data, 32);
+    hash.size = 48;
+    memcpy(hash.buffer, data, 48);
     TPMT_SIG_SCHEME scheme = {
         .scheme = TPM2_ALG_RSASSA
     };
-    scheme.details.rsassa.hashAlg = TPM2_ALG_SHA256;
+    scheme.details.rsassa.hashAlg = hashAlg;
     TPMT_SIGNATURE sig;
     TPMT_TK_HASHCHECK validation = {
         .tag = TPM2_ST_HASHCHECK,
@@ -702,7 +722,7 @@ int TpmSign20(TPM20* tpm, unsigned int* signatureSizeOut, unsigned char** signat
     *signatureSizeOut = sig.signature.rsassa.sig.size;
     *signatureOut = (unsigned char*)malloc(sig.signature.rsassa.sig.size);
     if (*signatureOut == NULL) {
-        rc = -10;
+        rc = -11;
         goto out;
     }
     memcpy(*signatureOut, sig.signature.rsassa.sig.buffer, sig.signature.rsassa.sig.size);

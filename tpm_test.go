@@ -8,6 +8,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/sha512"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -56,11 +57,12 @@ func TestTpm12(t *testing.T) {
 
 		// test sign
 		signMessage := []byte("foobar")
-		sig, err := tpm.Sign(sk, []byte{'1', '2', '3', '4'}, signMessage)
+		hashed := sha1.Sum(signMessage)
+		sig, err := tpm.Sign(sk, []byte{'1', '2', '3', '4'}, crypto.SHA1, hashed[:])
 		assert.NoError(t, err)
 
 		// validate that the sig matches
-		hashed := sha1.Sum(signMessage)
+
 		pub = sk.RSAPublicKey()
 		err = rsa.VerifyPKCS1v15(pub, crypto.SHA1, hashed[:], sig)
 		assert.NoError(t, err)
@@ -115,13 +117,14 @@ func TestTpm20Legacy(t *testing.T) {
 
 		// test sign
 		signMessage := []byte("foobar")
-		sig, err := tpm.Sign(sk, []byte{'1', '2', '3', '4'}, signMessage)
+		hashed := sha512.Sum384(signMessage)
+		sig, err := tpm.Sign(sk, []byte{'1', '2', '3', '4'}, crypto.SHA384, hashed[:])
 		assert.NoError(t, err)
 
 		// validate that the sig matches
-		hashed := sha256.Sum256(signMessage)
+
 		pub = sk.RSAPublicKey()
-		err = rsa.VerifyPKCS1v15(pub, crypto.SHA256, hashed[:], sig)
+		err = rsa.VerifyPKCS1v15(pub, crypto.SHA384, hashed[:], sig)
 		assert.NoError(t, err)
 
 		assert.NotEmpty(t, sk.PublicKey)
@@ -174,13 +177,13 @@ func TestTpm20(t *testing.T) {
 
 		// test sign
 		signMessage := []byte("foobar")
-		sig, err := tpm.Sign(sk, []byte{'1', '2', '3', '4'}, signMessage)
+		hashed := sha512.Sum384(signMessage)
+		sig, err := tpm.Sign(sk, []byte{'1', '2', '3', '4'}, crypto.SHA384, hashed[:])
 		assert.NoError(err)
 
 		// validate that the sig matches
-		hashed := sha256.Sum256(signMessage)
 		pub = sk.RSAPublicKey()
-		err = rsa.VerifyPKCS1v15(pub, crypto.SHA256, hashed[:], sig)
+		err = rsa.VerifyPKCS1v15(pub, crypto.SHA384, hashed[:], sig)
 		assert.NoError(err)
 		assert.NotEmpty(sk.PublicKey)
 		assert.NotEmpty(sk.PrivateKey)

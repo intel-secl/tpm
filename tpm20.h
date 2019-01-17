@@ -55,5 +55,5 @@ int TpmSign20(TPM20* tpm, unsigned int* signatureSizeOut, unsigned char** signat
     const unsigned int keyAuthLen, const unsigned char* keyAuth,
     const unsigned int privateKeyLen, const unsigned char* privateKey,
     const unsigned int publicKeyLen, const unsigned char* publicKey,
-    const unsigned int hashSize, const unsigned char* hash);
+    const unsigned int hashSize, const unsigned char* hash, int algId);
 #endif
