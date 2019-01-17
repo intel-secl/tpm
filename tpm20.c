@@ -592,6 +592,28 @@ TPM2_ALG_ID GoHash2TpmHash(int algId) {
     }
 } 
 
+int HashSize(TPM2_ALG_ID hashAlg) {
+    /* Hash algorithm sizes */
+    // #define TPM2_SHA_DIGEST_SIZE     20
+    // #define TPM2_SHA1_DIGEST_SIZE    20
+    // #define TPM2_SHA256_DIGEST_SIZE  32
+    // #define TPM2_SHA384_DIGEST_SIZE  48
+    // #define TPM2_SHA512_DIGEST_SIZE  64
+    // #define TPM2_SM3_256_DIGEST_SIZE 32
+    switch (hashAlg) {
+        case TPM2_ALG_SHA1:
+            return TPM2_SHA_DIGEST_SIZE;
+        case TPM2_ALG_SHA256:
+            return TPM2_SHA256_DIGEST_SIZE;
+        case TPM2_ALG_SHA384:
+            return TPM2_SHA384_DIGEST_SIZE;
+        case TPM2_SHA512_DIGEST_SIZE:
+            return TPM2_SHA512_DIGEST_SIZE;
+        default:
+            return 0;
+    }
+}
+
 int TpmSign20(TPM20* tpm, unsigned int* signatureSizeOut, unsigned char** signatureOut,
     const unsigned int keyAuthLen, const unsigned char* keyAuth, 
     const unsigned int privateKeyLen, const unsigned char* privateKey,
@@ -622,12 +644,14 @@ int TpmSign20(TPM20* tpm, unsigned int* signatureSizeOut, unsigned char** signat
     if (keyAuthLen > sizeof(((TPM2B_AUTH*)0)->buffer)) {
         return -8;
     }
-    if (dataSize != 48) {
-        return -9;
-    }
 
     TPM2_ALG_ID hashAlg = GoHash2TpmHash(algId);
     if (hashAlg == 0) {
+        return -9;
+    }
+
+    int hashLen = HashSize(hashAlg);
+    if (hashLen != dataSize) {
         return -10;
     }
 
@@ -705,8 +729,8 @@ int TpmSign20(TPM20* tpm, unsigned int* signatureSizeOut, unsigned char** signat
     dataIn.size = dataSize;
     memcpy(dataIn.buffer, data, dataSize);
     TPM2B_DIGEST hash;
-    hash.size = 48;
-    memcpy(hash.buffer, data, 48);
+    hash.size = hashLen;
+    memcpy(hash.buffer, data, hashLen);
     TPMT_SIG_SCHEME scheme = {
         .scheme = TPM2_ALG_RSASSA
     };
@@ -722,7 +746,7 @@ int TpmSign20(TPM20* tpm, unsigned int* signatureSizeOut, unsigned char** signat
     *signatureSizeOut = sig.signature.rsassa.sig.size;
     *signatureOut = (unsigned char*)malloc(sig.signature.rsassa.sig.size);
     if (*signatureOut == NULL) {
-        rc = -11;
+        rc = -12;
         goto out;
     }
     memcpy(*signatureOut, sig.signature.rsassa.sig.buffer, sig.signature.rsassa.sig.size);
