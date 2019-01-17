@@ -35,12 +35,6 @@ func TestTpm12(t *testing.T) {
 		assert.Equal(t, bk.Usage, Binding)
 		assert.Equal(t, bk.Version, V12)
 
-		// Test many keys
-		for i := 0; i < 3; i++ {
-			_, err := tpm.CreateCertifiedKey(Binding, []byte{'1', '2', '3', '4'}, []byte{'5', '6', '7', '8'})
-			assert.NoError(t, err)
-		}
-
 		// test unbind
 		pub := bk.RSAPublicKey()
 		rng := rand.Reader
@@ -59,6 +53,12 @@ func TestTpm12(t *testing.T) {
 		assert.NoError(t, err)
 		if err != nil {
 			return
+		}
+
+		// Test many keys
+		for i := 0; i < 3; i++ {
+			_, err := tpm.CreateCertifiedKey(Signing, []byte{'1', '2', '3', '4'}, []byte{'5', '6', '7', '8'})
+			assert.NoError(t, err)
 		}
 
 		// test sign
