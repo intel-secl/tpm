@@ -34,6 +34,7 @@ func getFileContents(keyFilePath string) []byte {
 	return byteValue
 }
 
+<<<<<<< HEAD
 func writeJsonToFileAsString(keyFilePath string, data []byte){
 
 		// create a file and write the json value to it and finally close it
@@ -49,6 +50,8 @@ func writeJsonToFileAsString(keyFilePath string, data []byte){
 	
 }
 
+=======
+>>>>>>> 31a04fd5f5fd5ac31312d42d5b3f3703934bf51e
 func getBytesFromBase64(data string) (ret []byte) {
 
 	ret, _ = base64.StdEncoding.DecodeString(data)
@@ -132,6 +135,7 @@ func createCertifiedKey() {
 	}
 }
 
+<<<<<<< HEAD
 func createKeyOnDisk() {
 	args := os.Args[2:]
 	if len(args) != 4 {
@@ -183,6 +187,8 @@ func createKeyOnDisk() {
 
 }
 
+=======
+>>>>>>> 31a04fd5f5fd5ac31312d42d5b3f3703934bf51e
 func sign() {
 
 	args := os.Args[2:]
@@ -281,8 +287,11 @@ func printUsage() {
 	fmt.Println("\tOutput: <publicKey, privateKey, keySignature, keyAttestation, keyName:optional>")
 	fmt.Println("Unbind <keyAuth> <publicKey> <privateKey> <encrypteddata>")
 	fmt.Println("\tOutput: <decrypteddata>")
+<<<<<<< HEAD
 	fmt.Println("CreateKeyOnDisk <usage := sign> <keyAuth := base64String> <aikauth := hexstring> <file := FilePathToWriteKey")
 	fmt.Println("\tOutput: CertifiedKey in JSON string format, Contents written to disk")
+=======
+>>>>>>> 31a04fd5f5fd5ac31312d42d5b3f3703934bf51e
 	fmt.Println("Sign <SigningCertifiedKeyPath> <Base64SigningSecret> <data>")
 	fmt.Println("\tOriginal Data: ")
 	fmt.Println("\tSha384 Hash(in base64): ")
@@ -300,8 +309,11 @@ func main() {
 	switch arg := args[0]; strings.ToLower(arg) {
 	case "createcertifiedkey":
 		createCertifiedKey()
+<<<<<<< HEAD
 	case "createkeyondisk":
 		createKeyOnDisk()
+=======
+>>>>>>> 31a04fd5f5fd5ac31312d42d5b3f3703934bf51e
 	case "unbind":
 		unbind()
 	case "sign":
