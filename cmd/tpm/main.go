@@ -218,7 +218,7 @@ func sign() {
 	}
 	defer t.Close()
 
-	signature, err := t.Sign(&ck, getBytesFromBase64(args[1]), crypto.SHA384, getHashData([]byte(args[2]), crypto.SHA384))
+	signature, err := t.Sign(&ck, getBytesFromBase64(args[1]), crypto.SHA256, getHashData([]byte(args[2]), crypto.SHA256))
 	if err != nil {
 		fmt.Println("Error", err)
 		return
