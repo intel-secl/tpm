@@ -14,6 +14,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"intel/isecl/lib/common/validation"
 )
 
 func fileExists(keyFilePath string) bool {
@@ -291,6 +292,12 @@ func printUsage() {
 }
 
 func main() {
+	inputValArr := os.Args[0:]
+	if valErr := validation.ValidateStrings(inputValArr); valErr != nil {
+		fmt.Println("Invalid string format")
+		os.Exit(1)
+	}
+
 	args := os.Args[1:]
 	if len(args) <= 0 {
 		printUsage()
