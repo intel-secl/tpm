@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2019 Intel Corporation
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
 package tpm
 
 // #cgo CFLAGS: -std=gnu11 -I${SRCDIR}/include/tss2/include -I${SRCDIR}/include/tspi/include -DMAXLOGLEVEL=LOGL_NONE

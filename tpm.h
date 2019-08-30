@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2019 Intel Corporation
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
 #define LIB_SAPI "libsapi.so.0"
 #define LIB_TCTI_SOCKET_LEGACY "libtcti-socket.so.0"
 #define LIB_TCTI_TABRMD "libtss2-tcti-tabrmd.so.0" 

@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2019 Intel Corporation
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
 package main
 
 import (
@@ -9,12 +13,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"intel/isecl/lib/common/validation"
 	"intel/isecl/lib/tpm"
 	"io/ioutil"
 	"log"
 	"os"
 	"strings"
-	"intel/isecl/lib/common/validation"
 )
 
 func fileExists(keyFilePath string) bool {
@@ -35,19 +39,18 @@ func getFileContents(keyFilePath string) []byte {
 	return byteValue
 }
 
-func writeJsonToFileAsString(keyFilePath string, data []byte){
+func writeJsonToFileAsString(keyFilePath string, data []byte) {
 
-		// create a file and write the json value to it and finally close it
-		f, err := os.Create(keyFilePath)
-		defer f.Close()
-		if err != nil {
-			fmt.Println("Could not create file:", keyFilePath)
-			return 
-		}
-		f.WriteString(string(data))
-		f.WriteString("\n")
-		
-	
+	// create a file and write the json value to it and finally close it
+	f, err := os.Create(keyFilePath)
+	defer f.Close()
+	if err != nil {
+		fmt.Println("Could not create file:", keyFilePath)
+		return
+	}
+	f.WriteString(string(data))
+	f.WriteString("\n")
+
 }
 
 func getBytesFromBase64(data string) (ret []byte) {
@@ -172,7 +175,7 @@ func createKeyOnDisk() {
 		fmt.Println("Error - Count not create key with TPM Error : ", err)
 	}
 
-	jsonData,err := json.MarshalIndent(ck,""," ")
+	jsonData, err := json.MarshalIndent(ck, "", " ")
 	if err != nil {
 		fmt.Println("Error : could not marshal certifiedkey to byte array")
 	}
