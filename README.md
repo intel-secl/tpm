@@ -1,8 +1,6 @@
 # ISecL TPM Library
 
-[![pipeline status](https://gitlab.devtools.intel.com/sst/isecl/lib/tpm/badges/master/pipeline.svg)](https://gitlab.devtools.intel.com/sst/isecl/lib/tpm/commits/master)
-
-This library provides several tpm functions for both TPM 1.2 and 2.0 chips.
+This library provides several tpm functions for TPM 2.0 chip.
 
 Currently, only two functions are provided: 
  - CreateCertifiedKey() creates a new binding or signing key that is signed by a parent key (usually an aik)
