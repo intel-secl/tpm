@@ -10,82 +10,12 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
-
-func TestTpm12(t *testing.T) {
-	Config.UseSimulator = true
-	Config.SimulatorVersion = V12
-
-	tpm, err := Open()
-	assert.NoError(t, err)
-	if err == nil {
-		defer tpm.Close()
-		bk, err := tpm.CreateCertifiedKey(Binding, []byte{'1', '2', '3', '4'}, []byte{'5', '6', '7', '8'})
-		assert.NoError(t, err)
-		if err != nil {
-			return
-		}
-		assert.NotEmpty(t, bk.PublicKey)
-		assert.NotEmpty(t, bk.PrivateKey)
-		assert.NotEmpty(t, bk.KeySignature)
-		assert.NotEmpty(t, bk.KeyAttestation)
-		assert.Empty(t, bk.KeyName)
-		assert.Equal(t, bk.Usage, Binding)
-		assert.Equal(t, bk.Version, V12)
-
-		// test unbind
-		pub := bk.RSAPublicKey()
-		rng := rand.Reader
-		message := []byte{
-			1, 1, 0, 0, // version
-			2, // TPM_PT_BIND
-			'f', 'o', 'o', 'b', 'a', 'r',
-		}
-		cipher, err := rsa.EncryptOAEP(sha1.New(), rng, pub, message, []byte{'T', 'C', 'P', 'A'})
-		assert.NoError(t, err)
-		dec, err := tpm.Unbind(bk, []byte{'1', '2', '3', '4'}, cipher)
-		assert.NoError(t, err)
-		assert.Equal(t, []byte{'f', 'o', 'o', 'b', 'a', 'r'}, dec)
-
-		sk, err := tpm.CreateCertifiedKey(Signing, []byte{'1', '2', '3', '4'}, []byte{'5', '6', '7', '8'})
-		assert.NoError(t, err)
-		if err != nil {
-			return
-		}
-
-		// Test many keys
-		for i := 0; i < 3; i++ {
-			_, err := tpm.CreateCertifiedKey(Signing, []byte{'1', '2', '3', '4'}, []byte{'5', '6', '7', '8'})
-			assert.NoError(t, err)
-		}
-
-		// test sign
-		signMessage := []byte("foobar")
-		hashed := sha1.Sum(signMessage)
-		sig, err := tpm.Sign(sk, []byte{'1', '2', '3', '4'}, crypto.SHA1, hashed[:])
-		assert.NoError(t, err)
-
-		// validate that the sig matches
-
-		pub = sk.RSAPublicKey()
-		err = rsa.VerifyPKCS1v15(pub, crypto.SHA1, hashed[:], sig)
-		assert.NoError(t, err)
-
-		assert.NotEmpty(t, sk.PublicKey)
-		assert.NotEmpty(t, sk.PrivateKey)
-		assert.NotEmpty(t, sk.KeySignature)
-		assert.NotEmpty(t, sk.KeyAttestation)
-		assert.Empty(t, sk.KeyName)
-		assert.Equal(t, sk.Usage, Signing)
-		assert.Equal(t, sk.Version, V12)
-	}
-}
 
 func TestTpm20Legacy(t *testing.T) {
 	Config.UseSimulator = true

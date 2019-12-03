@@ -9,7 +9,5 @@
 #define LIB_TCTI_MSSIM "libtss2-tcti-mssim.so.0"
 #define LIB_TSS2_SYS "libtss2-sys.so.0"
 #define LIB_TSS2_MU "libtss2-mu.so.0"
-#define LIB_TSPI "libtspi.so.1"
 
-#include "tpm12.h"
 #include "tpm20.h"
