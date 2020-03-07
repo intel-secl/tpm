@@ -8,4 +8,4 @@ require (
 	intel/isecl/lib/common v0.0.0
 )
 
-replace intel/isecl/lib/common => github.com/intel-secl/common v2.0
+replace intel/isecl/lib/common => github.com/intel-secl/common v2.0.0
